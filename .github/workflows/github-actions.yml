@@ -24,7 +24,7 @@ jobs:
       # Install dependencies
       - name: Install dependencies
         run: |
-            cd .\blog-app\
+            cd blog-apps
             npm ci
 
       # Create .env file
