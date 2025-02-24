@@ -50,18 +50,18 @@ jobs:
 
       # Deploy to GitHub Pages
       - name: Deploy
-       run: |
-          pwd
-          cd blog-app
-          git config --global user.name github-actions
-          git config --global user.email github-actions@github.com
-          git checkout --orphan gh-pages
-          git reset --hard
-          ls dist/blog-app/*
-          git add -f dist/blog-app/
-          git mv dist/blog-app/* .
-          rm -rf dist/blog-app
-          git add .
-          git commit -m "Deploy to GitHub Pages"
-          git push origin gh-pages --force
+        run: |
+            pwd
+            cd blog-app
+            git config --global user.name github-actions
+            git config --global user.email github-actions@github.com
+            git checkout --orphan gh-pages
+            git reset --hard
+            ls dist/blog-app/*
+            git add -f dist/blog-app/
+            git mv dist/blog-app/* .
+            rm -rf dist/blog-app
+            git add .
+            git commit -m "Deploy to GitHub Pages"
+            git push origin gh-pages --force
           
