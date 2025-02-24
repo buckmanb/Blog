@@ -30,12 +30,15 @@ jobs:
       # Create .env file
       - name: Create .env file
         run: |
+          pwd
+          cd blog-app          
           echo "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" >> .env
           echo "FIREBASE_AUTH_DOMAIN=${{ vars.FIREBASE_AUTH_DOMAIN }}" >> .env
           echo "FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}" >> .env
           echo "FIREBASE_STORAGE_BUCKET=${{ vars.FIREBASE_STORAGE_BUCKET }}" >> .env
           echo "FIREBASE_MESSAGING_SENDER_ID=${{ vars.FIREBASE_MESSAGING_SENDER_ID }}" >> .env
           echo "FIREBASE_APP_ID=${{ vars.FIREBASE_APP_ID }}" >> .env
+          cat .env
 
       # Build the project
       - name: Build
@@ -48,6 +51,8 @@ jobs:
       # Deploy to GitHub Pages
       - name: Deploy
         run: |
+          pwd
+          cd blog-app
           git config --global user.name github-actions
           git config --global user.email github-actions@github.com
           git checkout --orphan gh-pages
