@@ -58,8 +58,9 @@ jobs:
           git checkout --orphan gh-pages
           git reset --hard
           ls dist/blog-app/*
-          git add -f dist/blog-app/
-          git mv dist/blog-app/* .
+          cd dist
+          git add -f blog-app/
+          git mv blog-app/* .
           git commit -m "Deploy to GitHub Pages"
           git push origin gh-pages --force
-          
+
