@@ -1,0 +1,130 @@
+/* src/styles.scss */
+
+// Import theme styles
+@import './styles/theme.scss';
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+// Utility classes
+.text-center { text-align: center; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.gap-4 { gap: 1rem; }
+
+// Animation classes
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+// Material Design elevation classes
+.elevation-1 { box-shadow: var(--elevation-1); }
+.elevation-2 { box-shadow: var(--elevation-2); }
+.elevation-3 { box-shadow: var(--elevation-3); }
+
+// Card styles
+.custom-card {
+  background-color: var(--card-background);
+  border-radius: 8px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--elevation-3);
+  }
+}
+
+// Button styles
+.action-button {
+  transition: all 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// Form styles
+.form-container {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+// Loading indicator styles
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+// Snackbar custom styles
+.success-snackbar {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.error-snackbar {
+  background-color: var(--error-color);
+  color: white;
+}
+
+// Responsive container
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  box-sizing: border-box;
+}
+
+// Media queries
+@media (max-width: 768px) {
+  .container {
+    padding: 0 0.5rem;
+  }
+  
+  .form-container {
+    padding: 1rem;
+  }
+}
+
+// Custom scrollbar
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
+  
+  &:hover {
+    background: var(--primary-darker);
+  }
+}
