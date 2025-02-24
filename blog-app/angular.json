@@ -54,7 +54,8 @@
                   "maximumError": "8kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "baseHref": "/blog-app/"
             },
             "development": {
               "optimization": false,
@@ -63,6 +64,14 @@
             }
           },
           "defaultConfiguration": "production"
+        },
+        "deploy": {
+          "builder": "angular-cli-ghpages:deploy",
+          "options": {
+            "repo": "https://github.com/YOUR-USERNAME/YOUR-REPO-NAME",
+            "branch": "gh-pages",
+            "dir": "dist/blog-app/browser"
+          }
         },
         "serve": {
           "builder": "@angular-builders/custom-webpack:dev-server",
