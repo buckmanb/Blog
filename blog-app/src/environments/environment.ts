@@ -2,12 +2,12 @@
 export const environment = {
     production: false,
     firebase: {
-      apiKey: 'AIzaSyBETSM_xLRYrcFjoeslZt9YfRq2aR0E7I0',
-      authDomain: 'beaubuckman-e8c64.firebaseapp.com',
-      projectId: 'beaubuckman-e8c64',
-      storageBucket: 'beaubuckman-e8c64.firebasestorage.app',
-      messagingSenderId: '780030349868',
-      appId: '1:780030349868:web:943115deb9886538777789',
-      measurementId: "G-T1JE9QZP8Z"
+        apiKey: process.env['FIREBASE_API_KEY'] || 'YOUR_API_KEY',
+        authDomain: process.env['FIREBASE_AUTH_DOMAIN'] || 'YOUR_AUTH_DOMAIN',
+        projectId: process.env['FIREBASE_PROJECT_ID'] || 'YOUR_PROJECT_ID',
+        storageBucket: process.env['FIREBASE_STORAGE_BUCKET'] || 'YOUR_STORAGE_BUCKET',
+        messagingSenderId: process.env['FIREBASE_MESSAGING_SENDER_ID'] || 'YOUR_SENDER_ID',
+        appId: process.env['FIREBASE_APP_ID'] || 'YOUR_APP_ID',
+        measurementId: process.env['FIREBASE_MEASUREMENT_ID'] || 'YOUR_MEASUREMENT_ID'
     }
-  };
+};
