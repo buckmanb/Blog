@@ -4,25 +4,27 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      # Setup Node
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
+      # Install dependencies
       - name: Install dependencies
         run: npm ci
 
+      # Create .env file
       - name: Create .env file
         run: |
           echo "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" >> .env
@@ -32,11 +34,19 @@ jobs:
           echo "FIREBASE_MESSAGING_SENDER_ID=${{ vars.FIREBASE_MESSAGING_SENDER_ID }}" >> .env
           echo "FIREBASE_APP_ID=${{ vars.FIREBASE_APP_ID }}" >> .env
 
+      # Build the project
       - name: Build
         run: npm run build -- --base-href /Blog/
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: dist/blog-app/browser # Adjust this path based on your Angular 17 output directory
-          branch: gh-pages
+      # Deploy to GitHub Pages
+      - name: Deploy
+        run: |
+          git config --global user.name github-actions
+          git config --global user.email github-actions@github.com
+          git checkout --orphan gh-pages
+          git reset --hard
+          git add -f dist/blog-app/browser
+          git mv dist/blog-app/browser/* .
+          git add .
+          git commit -m "Deploy to GitHub Pages"
+          git push origin gh-pages --force
