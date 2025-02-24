@@ -39,7 +39,11 @@ jobs:
 
       # Build the project
       - name: Build
-        run: npm run build
+        run: |
+            pwd
+            npm run
+            cd blog-app            
+            npm run build
 
       # Deploy to GitHub Pages
       - name: Deploy
