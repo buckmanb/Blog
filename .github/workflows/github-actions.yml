@@ -36,12 +36,9 @@ jobs:
           echo "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
           cat .env
 
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to gh page
+      - name: Build and deploy to GitHub page
         env:                    
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx angular-cli-ghpages --dir=dist/blog-app --repo=https://github.com/buckmanb/Blog.git --user="Beau Buckman" --email="bbuckman@gmail.com"  --base-href="https://buckmanb.github.io/Blog"
+        run: ng deploy --dir="dist/blog-app" --repo="https://github.com/buckmanb/Blog.git" --name="Beau Buckman" --email="bbuckman@gmail.com"  --base-href="https://buckmanb.github.io/Blog"
