@@ -44,4 +44,4 @@ jobs:
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx angular-cli-ghpages
+        run: npx angular-cli-ghpages --dir=dist/blog-app
