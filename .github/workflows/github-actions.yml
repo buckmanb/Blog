@@ -44,4 +44,4 @@ jobs:
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx angular-cli-ghpages --dir=dist/blog-app
+        run: npx angular-cli-ghpages --dir=dist/blog-app --repo=https://github.com/buckmanb/Blog.git --user="Beau Buckman" --email="bbuckman@gmail.com"  --base-href="https://buckmanb.github.io/Blog"
