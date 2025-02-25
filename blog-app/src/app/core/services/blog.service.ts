@@ -11,9 +11,11 @@ import {
   query,
   where,
   orderBy,
-  limit,
+  limit as limitQuery, // Renamed to avoid naming conflicts
   serverTimestamp,
-  DocumentData
+  DocumentData,
+  QueryConstraint,
+  startAfter
 } from '@angular/fire/firestore';
 import { AuthService } from '../auth/auth.service';
 import { Observable, from, of, throwError } from 'rxjs';
@@ -138,7 +140,7 @@ export class BlogService {
         postsCollection, 
         where('status', '==', 'published'),
         orderBy('publishedAt', 'desc'),
-        limit(limitCount)
+        limitQuery(limitCount)
       );
       
       const querySnapshot = await getDocs(q);
@@ -190,7 +192,7 @@ export class BlogService {
   }
 
   /**
-   * Get a single post by ID
+   * Get a single post by ID with optimized loading
    */
   async getPostById(postId: string): Promise<BlogPost | null> {
     try {
@@ -201,12 +203,17 @@ export class BlogService {
         return null;
       }
       
-      return {
-        id: postSnap.id,
-        ...postSnap.data()
-      } as BlogPost;
+      // Get the post data
+      const post = { id: postSnap.id, ...postSnap.data() } as BlogPost;
+      
+      // Increment view count asynchronously (don't wait for it)
+      this.incrementViewCount(postId).catch(err => 
+        console.error('Error incrementing view count:', err)
+      );
+      
+      return post;
     } catch (error) {
-      console.error('Error fetching post:', error);
+      console.error('Error fetching post by ID:', error);
       throw error;
     }
   }
@@ -222,7 +229,7 @@ export class BlogService {
         where('status', '==', 'published'),
         where('tags', 'array-contains', tag),
         orderBy('publishedAt', 'desc'),
-        limit(limitCount)
+        limitQuery(limitCount)
       );
       
       const querySnapshot = await getDocs(q);
@@ -250,7 +257,7 @@ export class BlogService {
         where('status', '==', 'published'),
         where('featured', '==', true),
         orderBy('publishedAt', 'desc'),
-        limit(limitCount)
+        limitQuery(limitCount)
       );
       
       const querySnapshot = await getDocs(q);
@@ -263,6 +270,196 @@ export class BlogService {
       });
     } catch (error) {
       console.error('Error fetching featured posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get filtered posts with pagination
+   */
+  async getFilteredPosts(options: {
+    tag?: string;
+    search?: string;
+    authorId?: string;
+    status?: 'published' | 'draft';
+    sort?: 'latest' | 'oldest' | 'popular';
+    startAfter?: any;
+    limit?: number;
+  }): Promise<{ posts: BlogPost[]; hasMore: boolean }> {
+    try {
+      const {
+        tag,
+        search,
+        authorId,
+        status = 'published',
+        sort = 'latest',
+        startAfter,
+        limit = 10
+      } = options;
+      
+      // Start building the query
+      let postsQuery = collection(this.firestore, 'posts');
+      let constraints: QueryConstraint[] = [
+        where('status', '==', status)
+      ];
+      
+      // Add author filter if specified
+      if (authorId) {
+        constraints.push(where('authorId', '==', authorId));
+      }
+      
+      // Add tag filter if specified
+      if (tag) {
+        constraints.push(where('tags', 'array-contains', tag));
+      }
+      
+      // Add sorting
+      switch (sort) {
+        case 'latest':
+          constraints.push(orderBy('publishedAt', 'desc'));
+          break;
+        case 'oldest':
+          constraints.push(orderBy('publishedAt', 'asc'));
+          break;
+        case 'popular':
+          constraints.push(orderBy('views', 'desc'));
+          break;
+      }
+      
+      // Add pagination if startAfter is provided
+      if (startAfter) {
+        constraints.push(startAfter(startAfter));
+      }
+      
+      // Add limit to query (using limitCount to avoid name collision)
+      const limitCount = limit + 1; // Get one extra to check if there are more
+      constraints.push(limitQuery(limitCount));
+      
+      // Create the query
+      const q = query(postsQuery, ...constraints);
+      
+      // Execute the query
+      const querySnapshot = await getDocs(q);
+      
+      // Check if there are more results
+      const hasMore = querySnapshot.docs.length > limit;
+      
+      // Convert the query snapshot to posts
+      const posts = querySnapshot.docs
+        .slice(0, limit) // Remove the extra document we fetched to check for more
+        .map(doc => ({ id: doc.id, ...doc.data() } as BlogPost));
+      
+      // If search is specified, filter the results client-side
+      // Note: In a real app, you might want to use a search service like Algolia for this
+      let filteredPosts = posts;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredPosts = posts.filter(post => 
+          post.title.toLowerCase().includes(searchLower) ||
+          post.content.toLowerCase().includes(searchLower) ||
+          (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
+        );
+      }
+      
+      return { posts: filteredPosts, hasMore };
+    } catch (error) {
+      console.error('Error fetching filtered posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all unique tags used in posts
+   */
+  async getAvailableTags(): Promise<string[]> {
+    try {
+      // This would be more efficient with a dedicated tags collection
+      // For now, we'll fetch all published posts and extract tags
+      const postsRef = collection(this.firestore, 'posts');
+      const q = query(
+        postsRef,
+        where('status', '==', 'published'),
+        limitQuery(100) // Limit to a reasonable number
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      // Extract tags from all posts and create a unique set
+      const tagSet = new Set<string>();
+      querySnapshot.docs.forEach(doc => {
+        const post = doc.data() as BlogPost;
+        if (post.tags && Array.isArray(post.tags)) {
+          post.tags.forEach(tag => tagSet.add(tag));
+        }
+      });
+      
+      // Convert set to array and sort alphabetically
+      return Array.from(tagSet).sort();
+    } catch (error) {
+      console.error('Error fetching available tags:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get related posts based on tags
+   */
+  async getRelatedPosts(postId: string, tags: string[], maxLimit: number = 3): Promise<BlogPost[]> {
+    try {
+      if (!tags.length) return [];
+      
+      const postsRef = collection(this.firestore, 'posts');
+      const q = query(
+        postsRef,
+        where('status', '==', 'published'),
+        where('tags', 'array-contains-any', tags),
+        where('__name__', '!=', postId), // Exclude the current post
+        orderBy('__name__'), // Need to order by ID for the != filter to work
+        orderBy('publishedAt', 'desc'),
+        limitQuery(maxLimit)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BlogPost));
+    } catch (error) {
+      console.error('Error fetching related posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search posts by title or content
+   */
+  async searchPosts(searchTerm: string, maxResults: number = 10): Promise<BlogPost[]> {
+    try {
+      // Note: This is a simple implementation that won't scale well
+      // For production, consider using a dedicated search service like Algolia
+      const postsRef = collection(this.firestore, 'posts');
+      const q = query(
+        postsRef,
+        where('status', '==', 'published'),
+        orderBy('publishedAt', 'desc'),
+        limitQuery(100) // Fetch a larger set to filter client-side
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Filter posts that match the search term
+      const matchingPosts = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as BlogPost))
+        .filter(post => 
+          post.title.toLowerCase().includes(searchLower) ||
+          post.content.toLowerCase().includes(searchLower) ||
+          (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
+        )
+        .slice(0, maxResults);
+      
+      return matchingPosts;
+    } catch (error) {
+      console.error('Error searching posts:', error);
       throw error;
     }
   }
