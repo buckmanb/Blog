@@ -13,6 +13,7 @@ A modern, feature-rich blog platform built with Angular 19 and Firebase, support
   - Admin: Full system access, moderation capabilities
   - Author: Content creation and management
   - User: Commenting and interaction
+  - Anonymous: View published blog posts
 - User profiles displaying authored posts and activity
 
 ### Content Management

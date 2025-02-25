@@ -1,5 +1,4 @@
-// src/app/layout/navbar.component.ts
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -33,7 +32,7 @@ import { AuthService } from '../core/auth/auth.service';
       <span class="spacer"></span>
       
       <!-- Navigation Links - Desktop -->
-      <div class="nav-links" [class.hidden]="isMobile">
+      <div class="nav-links" [class.hidden]="isMobile()">
         <a mat-button routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
           Home
         </a>
@@ -48,7 +47,7 @@ import { AuthService } from '../core/auth/auth.service';
           </a>
           
           <!-- Only show for admins -->
-          @if (isAdmin()) {
+          @if (isAdminUser()) {
             <a mat-button routerLink="/admin" routerLinkActive="active">
               Admin
             </a>
@@ -66,7 +65,7 @@ import { AuthService } from '../core/auth/auth.service';
         <!-- User actions -->
         @if (isLoggedIn()) {
           <button mat-icon-button [matMenuTriggerFor]="userMenu" aria-label="User menu" class="user-menu-trigger">
-            @if (user()?.photoURL) {
+            @if (userPhoto()) {
               <img [src]="user()?.photoURL" alt="Profile" class="user-avatar">
             } @else {
               <mat-icon>account_circle</mat-icon>
@@ -105,14 +104,14 @@ import { AuthService } from '../core/auth/auth.service';
         }
         
         <!-- Mobile menu button -->
-        <button mat-icon-button class="mobile-menu-button" (click)="toggleMobileMenu()" [class.hidden]="!isMobile">
+        <button mat-icon-button class="mobile-menu-button" (click)="toggleMobileMenu()" [class.hidden]="!isMobile()">
           <mat-icon>menu</mat-icon>
         </button>
       </div>
     </mat-toolbar>
     
     <!-- Mobile Navigation Menu -->
-    <div class="mobile-menu" [class.open]="mobileMenuOpen() && isMobile">
+    <div class="mobile-menu" [class.open]="mobileMenuOpen() && isMobile()">
       <nav>
         <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="closeMobileMenu()">
           Home
@@ -135,7 +134,7 @@ import { AuthService } from '../core/auth/auth.service';
             My Posts
           </a>
           
-          @if (isAdmin()) {
+          @if (isAdminUser()) {
             <a routerLink="/admin" routerLinkActive="active" (click)="closeMobileMenu()">
               Admin
             </a>
@@ -156,214 +155,225 @@ import { AuthService } from '../core/auth/auth.service';
       </nav>
     </div>
   `,
-  styles: [`
-    /* Navbar styles */
-    .navbar {
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
-      box-shadow: var(--elevation-1);
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      height: 64px;
-    }
-    
-    .brand {
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      align-items: center;
-    }
-    
-    .site-name {
-      font-size: 1.5rem;
-      font-weight: 500;
-      letter-spacing: 0.02em;
-      margin-left: 8px;
-    }
-    
-    .spacer {
-      flex: 1 1 auto;
-    }
-    
+ styles: [`
+  /* Navbar styles */
+  .navbar {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    box-shadow: var(--elevation-1);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    height: 64px;
+  }
+  
+  .brand {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    align-items: center;
+  }
+  
+  .site-name {
+    font-size: 1.5rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin-left: 8px;
+  }
+  
+  .spacer {
+    flex: 1 1 auto;
+  }
+  
+  .nav-links {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  /* User avatar */
+  .user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  /* User menu styles */
+  .user-menu-header {
+    padding: 16px;
+    min-width: 200px;
+  }
+  
+  .user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .user-name {
+    margin: 0;
+    font-weight: 500;
+  }
+  
+  .user-email {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  
+  /* Mobile menu styles */
+  .mobile-menu-button {
+    display: none;
+  }
+  
+  .mobile-menu {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    right: 0;
+    background-color: var(--background-color);
+    height: 0;
+    overflow: hidden;
+    transition: height 0.3s ease;
+    z-index: 999;
+    box-shadow: var(--elevation-2);
+  }
+  
+  .mobile-menu.open {
+    height: calc(100vh - 64px);
+    overflow-y: auto;
+  }
+  
+  .mobile-menu nav {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+  }
+  
+  .mobile-menu a {
+    padding: 16px;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .mobile-menu a.active {
+    color: var(--primary-color);
+    font-weight: 500;
+  }
+  
+  .sign-out-button {
+    margin-top: 16px;
+    padding: 16px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 1.1rem;
+    color: var(--error-color);
+    cursor: pointer;
+  }
+  
+  /* Active link styling */
+  .active {
+    font-weight: 500;
+  }
+  
+  /* Helper classes */
+  .hidden {
+    display: none !important;
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 768px) {
     .nav-links {
-      display: flex;
-      gap: 8px;
-    }
-    
-    .actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    /* User avatar */
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-    
-    /* User menu styles */
-    .user-menu-header {
-      padding: 16px;
-      min-width: 200px;
-    }
-    
-    .user-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    
-    .user-name {
-      margin: 0;
-      font-weight: 500;
-    }
-    
-    .user-email {
-      margin: 0;
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-    }
-    
-    /* Mobile menu styles */
-    .mobile-menu-button {
       display: none;
     }
     
-    .mobile-menu {
-      position: fixed;
-      top: 64px;
-      left: 0;
-      right: 0;
-      background-color: var(--background-color);
-      height: 0;
-      overflow: hidden;
-      transition: height 0.3s ease;
-      z-index: 999;
-      box-shadow: var(--elevation-2);
+    .mobile-menu-button {
+      display: block;
     }
-    
-    .mobile-menu.open {
-      height: calc(100vh - 64px);
-      overflow-y: auto;
-    }
-    
-    .mobile-menu nav {
-      display: flex;
-      flex-direction: column;
-      padding: 16px;
-    }
-    
-    .mobile-menu a {
-      padding: 16px;
-      text-decoration: none;
-      color: var(--text-primary);
-      font-size: 1.1rem;
-      border-bottom: 1px solid var(--border-color);
-    }
-    
-    .mobile-menu a.active {
-      color: var(--primary-color);
-      font-weight: 500;
-    }
-    
-    .sign-out-button {
-      margin-top: 16px;
-      padding: 16px;
-      background: none;
-      border: none;
-      text-align: left;
-      font-size: 1.1rem;
-      color: var(--error-color);
-      cursor: pointer;
-    }
-    
-    /* Active link styling */
-    .active {
-      font-weight: 500;
-    }
-    
-    /* Helper classes */
-    .hidden {
-      display: none !important;
-    }
-    
-    /* Responsive styles */
-    @media (max-width: 768px) {
-      .nav-links {
-        display: none;
-      }
-      
-      .mobile-menu-button {
-        display: block;
-      }
-    }
-  `]
+  }
+`]
 })
 export class NavbarComponent implements OnInit {
-  private themeService = inject(ThemeService);
+  public themeService = inject(ThemeService);
   private authService = inject(AuthService);
-  
+
+  // Reactive signals for user state
+  isLoggedIn = signal(false);
+  isAdminUser = signal(false);
+
+  // Memoized user photo to prevent multiple fetches
+  userPhoto = computed(() => {
+    const user = this.authService.currentUser();
+    return user?.photoURL || null;
+  });
+
   // Mobile menu state
-  isMobile = false;
-  mobileMenuOpen = signal<boolean>(false);
-  
+  isMobile = signal(false);
+  mobileMenuOpen = signal(false);
+
   // User data
   user = this.authService.currentUser;
-  
+
+  constructor() {
+    // Add reactive effect to update user state
+    effect(() => {
+      const currentUser = this.authService.currentUser();
+      const profile = this.authService.profile();
+
+      console.group('🔍 Navbar Reactivity Update');
+      console.log('Current User:', currentUser);
+      console.log('User Profile:', profile);
+      console.log('User Photo:', this.userPhoto());
+
+      this.isLoggedIn.set(!!currentUser);
+      this.isAdminUser.set(profile?.role === 'admin');
+
+      console.log('Is Logged In:', this.isLoggedIn());
+      console.log('Is Admin:', this.isAdminUser());
+      console.groupEnd();
+    }, { allowSignalWrites: true });
+  }
+
   ngOnInit() {
     this.checkScreenSize();
     window.addEventListener('resize', () => this.checkScreenSize());
   }
-  
-  isLoggedIn(): boolean {
-    const currentUser = this.authService.currentUser();
-    const profile = this.authService.profile();
-    
-    console.group('🔍 Navbar Login Check');
-    console.log('Current User:', currentUser);
-    console.log('User Profile:', profile);
-    console.log('Is Logged In:', !!currentUser);
-    console.groupEnd();
-    
-    return !!currentUser;
-  }
-  
-  // Corrected code
-  isAdmin(): boolean {
-    const profile = this.authService.profile();
-  
-    console.group('🔍 Navbar Admin Check');
-    console.log('User Profile:', profile);
-    console.log('Is Admin:', profile?.role === 'admin');
-    console.groupEnd();
-    
-    return profile?.role === 'admin';
-  }
-  
+
   onSignOut() {
     this.authService.signOut();
     this.closeMobileMenu();
   }
-  
+
   toggleMobileMenu() {
     this.mobileMenuOpen.update(open => !open);
   }
-  
+
   closeMobileMenu() {
     this.mobileMenuOpen.set(false);
   }
-  
+
   private checkScreenSize() {
-    this.isMobile = window.innerWidth < 768;
-    if (!this.isMobile) {
+    this.isMobile.set(window.innerWidth < 768);
+    if (!this.isMobile()) {
       this.closeMobileMenu();
     }
+  }
+
+  handleImageError(event: ErrorEvent) {
+    console.warn('Image load failed', event);
+    // Optionally set a default avatar or hide the image
+    (event.target as HTMLImageElement).src = 'path/to/default/avatar.png';
   }
 }

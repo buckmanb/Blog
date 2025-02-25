@@ -1,5 +1,3 @@
-Based on where we are now, here's our high-level todo list for the blog system:
-
 1. **Complete Post Management**
    - Implement edit mode in the CreatePostComponent
    - Add code syntax highlighting to the rich text editor
