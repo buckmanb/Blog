@@ -12,26 +12,22 @@ jobs:
     permissions:
       contents: write
     
+    defaults:
+      run:
+        working-directory: ./blog-app
+    
     steps:
       - uses: actions/checkout@v3
 
-      # Setup Node
       - uses: actions/setup-node@v3
         with:
           node-version: '20'
-
           
-      # Install dependencies
       - name: Install dependencies
-        run: |
-            cd blog-app
-            npm ci
+        run: npm ci
 
-      # Create .env file
       - name: Create .env file
         run: |
-          pwd
-          cd blog-app          
           echo "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" >> .env
           echo "FIREBASE_AUTH_DOMAIN=${{ secrets.FIREBASE_AUTH_DOMAIN }}" >> .env
           echo "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" >> .env
@@ -40,19 +36,12 @@ jobs:
           echo "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
           cat .env
 
-      # Build the project
       - name: Build
-        run: |
-            pwd
-            cd blog-app            
-            npm run build
+        run: npm run build
 
-      # Deploy to GitHub Pages
       - name: Deploy to gh page
         env:                    
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-            cd blog-app
-            npx angular-cli-ghpages
+        run: npx angular-cli-ghpages
