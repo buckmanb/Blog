@@ -6,6 +6,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { ThemeToggleComponent } from './shared/components/theme-toggle.component';
 import { AuthService } from './core/auth/auth.service';
+import { NavbarComponent } from './layout/navbar.component';
 
 @Component({
   selector: 'app-root',
@@ -15,27 +16,22 @@ import { AuthService } from './core/auth/auth.service';
     RouterOutlet,
     MatToolbarModule,
     MatButtonModule,
-    ThemeToggleComponent
+    ThemeToggleComponent,
+    NavbarComponent
   ],
   template: `
     <div class="app-container">
-      <mat-toolbar color="primary" class="app-toolbar">
-        <span class="app-title">Blog App</span>
-        
-        <div class="toolbar-spacer"></div>
-        
-        <app-theme-toggle></app-theme-toggle>
-        
-        @if (authService.currentUser()) {
-          <button mat-flat-button color="primary" (click)="authService.signOut()">
-            Sign Out
-          </button>
-        }
-      </mat-toolbar>
+      <app-navbar></app-navbar>
 
       <main class="app-content">
         <router-outlet></router-outlet>
       </main>
+      
+      <footer class="footer">
+        <div class="container">
+          <p>&copy; {{ currentYear }} Blog App. All rights reserved.</p>
+        </div>
+      </footer>
     </div>
   `,
   styles: [`
@@ -43,25 +39,6 @@ import { AuthService } from './core/auth/auth.service';
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-    }
-
-    .app-toolbar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      transition: background-color 0.3s ease;
-    }
-
-    .toolbar-spacer {
-      flex: 1 1 auto;
-    }
-
-    .app-title {
-      font-size: 1.5rem;
-      font-weight: 300;
-      letter-spacing: 0.5px;
     }
 
     .app-content {
@@ -74,8 +51,24 @@ import { AuthService } from './core/auth/auth.service';
       margin-right: auto;
       box-sizing: border-box;
     }
+    
+    .footer {
+      padding: 1rem;
+      background-color: var(--surface-color);
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
   `]
 })
 export class AppComponent {
   authService = inject(AuthService);
+  currentYear = new Date().getFullYear();
 }

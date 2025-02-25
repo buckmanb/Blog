@@ -6,21 +6,41 @@ import {
   addDoc,
   updateDoc,
   doc,
-  serverTimestamp 
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp,
+  DocumentData
 } from '@angular/fire/firestore';
 import { AuthService } from '../auth/auth.service';
+import { Observable, from, of, throwError } from 'rxjs';
+import { map, catchError, switchMap } from 'rxjs/operators';
 
 export interface BlogPost {
   id?: string;
   title: string;
   content: string;
-  image?: string;
-  tags: string[];
+  excerpt?: string;
+  authorId?: string;
+  authorName?: string;
+  authorPhotoURL?: string;
   status: 'draft' | 'published';
-  authorId: string;
-  authorName: string;
-  createdAt: any;
-  updatedAt: any;
+  featured?: boolean;
+  tags: string[];
+  imageUrl?: string;
+  image?: {
+    publicId: string;
+    url: string;
+    width: number;
+    height: number;
+  };
+  likes?: number;
+  views?: number;
+  createdAt?: any;
+  updatedAt?: any;
   publishedAt?: any;
 }
 
@@ -31,33 +51,314 @@ export class BlogService {
   private firestore = inject(Firestore);
   private authService = inject(AuthService);
 
+  /**
+   * Create a new blog post
+   */
   async createPost(post: Partial<BlogPost>): Promise<string> {
     const user = this.authService.currentUser();
-    if (!user) throw new Error('Must be logged in to create a post');
-
-    const postCollection = collection(this.firestore, 'posts');
     
-    const newPost: Partial<BlogPost> = {
-      ...post,
-      authorId: user.uid,
-      authorName: user.displayName || 'Anonymous',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      publishedAt: post.status === 'published' ? serverTimestamp() : null
-    };
-
-    const docRef = await addDoc(postCollection, newPost);
-    return docRef.id;
+    if (!user) {
+      throw new Error('You must be logged in to create a post');
+    }
+    
+    // Get the current user profile
+    const profile = this.authService.profile();
+    
+    if (!profile) {
+      throw new Error('User profile not found');
+    }
+    
+    try {
+      const postCollection = collection(this.firestore, 'posts');
+      
+      // Prepare the post data with author information
+      const newPost: Partial<BlogPost> = {
+        ...post,
+        authorId: user.uid,
+        authorName: profile.displayName || user.displayName || 'Anonymous',
+        authorPhotoURL: profile.photoURL || user.photoURL || '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        publishedAt: post.status === 'published' ? serverTimestamp() : null,
+        likes: 0,
+        views: 0
+      };
+      
+      console.log('Creating new post with data:', JSON.stringify(newPost, null, 2));
+      
+      const docRef = await addDoc(postCollection, newPost);
+      console.log('Post created with ID:', docRef.id);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating post:', error);
+      throw error;
+    }
   }
 
+  /**
+   * Update an existing blog post
+   */
   async updatePost(postId: string, updates: Partial<BlogPost>): Promise<void> {
-    const postRef = doc(this.firestore, 'posts', postId);
-    await updateDoc(postRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-      publishedAt: updates.status === 'published' ? serverTimestamp() : null
-    });
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to update a post');
+    }
+    
+    try {
+      // First check if the user is the author of the post
+      const postRef = doc(this.firestore, 'posts', postId);
+      
+      // Prepare the update data
+      const updateData: Partial<BlogPost> = {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      };
+      
+      // If the status is changing to published, set the publishedAt timestamp
+      if (updates.status === 'published') {
+        updateData.publishedAt = serverTimestamp();
+      }
+      
+      await updateDoc(postRef, updateData);
+    } catch (error) {
+      console.error('Error updating post:', error);
+      throw error;
+    }
   }
 
-  // Add more methods for fetching posts, etc.
+  /**
+   * Get all published posts
+   */
+  async getPublishedPosts(limitCount = 10): Promise<BlogPost[]> {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const q = query(
+        postsCollection, 
+        where('status', '==', 'published'),
+        orderBy('publishedAt', 'desc'),
+        limit(limitCount)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data() as DocumentData;
+        return {
+          id: doc.id,
+          ...data
+        } as BlogPost;
+      });
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get posts for the current user
+   */
+  async getUserPosts(): Promise<BlogPost[]> {
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to view your posts');
+    }
+    
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const q = query(
+        postsCollection, 
+        where('authorId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data() as DocumentData;
+        return {
+          id: doc.id,
+          ...data
+        } as BlogPost;
+      });
+    } catch (error) {
+      console.error('Error fetching user posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single post by ID
+   */
+  async getPostById(postId: string): Promise<BlogPost | null> {
+    try {
+      const postRef = doc(this.firestore, 'posts', postId);
+      const postSnap = await getDoc(postRef);
+      
+      if (!postSnap.exists()) {
+        return null;
+      }
+      
+      return {
+        id: postSnap.id,
+        ...postSnap.data()
+      } as BlogPost;
+    } catch (error) {
+      console.error('Error fetching post:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get posts by tag
+   */
+  async getPostsByTag(tag: string, limitCount = 10): Promise<BlogPost[]> {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const q = query(
+        postsCollection,
+        where('status', '==', 'published'),
+        where('tags', 'array-contains', tag),
+        orderBy('publishedAt', 'desc'),
+        limit(limitCount)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => {
+        return {
+          id: doc.id,
+          ...doc.data()
+        } as BlogPost;
+      });
+    } catch (error) {
+      console.error('Error fetching posts by tag:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get featured posts
+   */
+  async getFeaturedPosts(limitCount = 5): Promise<BlogPost[]> {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const q = query(
+        postsCollection,
+        where('status', '==', 'published'),
+        where('featured', '==', true),
+        orderBy('publishedAt', 'desc'),
+        limit(limitCount)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => {
+        return {
+          id: doc.id,
+          ...doc.data()
+        } as BlogPost;
+      });
+    } catch (error) {
+      console.error('Error fetching featured posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Like a post
+   */
+  async likePost(postId: string): Promise<void> {
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to like a post');
+    }
+    
+    try {
+      // In a real implementation, you'd need to check if the user has already liked the post
+      // and maintain a collection of likes per post
+      
+      const postRef = doc(this.firestore, 'posts', postId);
+      const postSnap = await getDoc(postRef);
+      
+      if (!postSnap.exists()) {
+        throw new Error('Post not found');
+      }
+      
+      const post = postSnap.data() as BlogPost;
+      const currentLikes = post.likes || 0;
+      
+      await updateDoc(postRef, {
+        likes: currentLikes + 1
+      });
+    } catch (error) {
+      console.error('Error liking post:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Increment view count for a post
+   */
+  async incrementViewCount(postId: string): Promise<void> {
+    try {
+      const postRef = doc(this.firestore, 'posts', postId);
+      const postSnap = await getDoc(postRef);
+      
+      if (!postSnap.exists()) {
+        throw new Error('Post not found');
+      }
+      
+      const post = postSnap.data() as BlogPost;
+      const currentViews = post.views || 0;
+      
+      await updateDoc(postRef, {
+        views: currentViews + 1
+      });
+    } catch (error) {
+      console.error('Error incrementing view count:', error);
+      // Don't throw this error as it's not critical
+    }
+  }
+
+  /**
+   * Delete a post
+   */
+  async deletePost(postId: string): Promise<void> {
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to delete a post');
+    }
+    
+    try {
+      const postRef = doc(this.firestore, 'posts', postId);
+      const postSnap = await getDoc(postRef);
+      
+      if (!postSnap.exists()) {
+        throw new Error('Post not found');
+      }
+      
+      const post = postSnap.data() as BlogPost;
+      
+      // Check if user is author or admin
+      const profile = this.authService.profile();
+      if (post.authorId !== user.uid && profile?.role !== 'admin') {
+        throw new Error('You do not have permission to delete this post');
+      }
+      
+      // For now we'll just update the post to be flagged as deleted
+      // In a real implementation, you might want to move it to a deleted collection
+      await updateDoc(postRef, {
+        status: 'deleted',
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      throw error;
+    }
+  }
 }
