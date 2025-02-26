@@ -155,6 +155,7 @@ export class ImageUploadComponent {
   private cloudinaryService = inject(CloudinaryService);
 
   @Input() maxFileSizeMB = 10;
+  @Input() initialImageUrl = '';   
   @Output() imageUploaded = new EventEmitter<CloudinaryUploadResult>();
   @Output() imageRemoved = new EventEmitter<void>();
 
@@ -163,6 +164,13 @@ export class ImageUploadComponent {
   isDragging = signal<boolean>(false);
   errorMessage = signal<string>('');
   imageData = signal<CloudinaryUploadResult | null>(null);
+
+  ngOnInit() {
+    // Initialize the image URL if provided
+    if (this.initialImageUrl) {
+      this.imageUrl.set(this.initialImageUrl);
+    }
+  }
 
   onDragOver(event: DragEvent) {
     event.preventDefault();

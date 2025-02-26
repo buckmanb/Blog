@@ -1,8 +1,8 @@
 // src/app/core/services/blog.service.ts
 import { Injectable, inject } from '@angular/core';
-import { 
-  Firestore, 
-  collection, 
+import {
+  Firestore,
+  collection,
   addDoc,
   updateDoc,
   doc,
@@ -58,21 +58,21 @@ export class BlogService {
    */
   async createPost(post: Partial<BlogPost>): Promise<string> {
     const user = this.authService.currentUser();
-    
+
     if (!user) {
       throw new Error('You must be logged in to create a post');
     }
-    
+
     // Get the current user profile
     const profile = this.authService.profile();
-    
+
     if (!profile) {
       throw new Error('User profile not found');
     }
-    
+
     try {
       const postCollection = collection(this.firestore, 'posts');
-      
+
       // Prepare the post data with author information
       const newPost: Partial<BlogPost> = {
         ...post,
@@ -85,12 +85,12 @@ export class BlogService {
         likes: 0,
         views: 0
       };
-      
+
       console.log('Creating new post with data:', JSON.stringify(newPost, null, 2));
-      
+
       const docRef = await addDoc(postCollection, newPost);
       console.log('Post created with ID:', docRef.id);
-      
+
       return docRef.id;
     } catch (error) {
       console.error('Error creating post:', error);
@@ -103,26 +103,26 @@ export class BlogService {
    */
   async updatePost(postId: string, updates: Partial<BlogPost>): Promise<void> {
     const user = this.authService.currentUser();
-    
+
     if (!user) {
       throw new Error('You must be logged in to update a post');
     }
-    
+
     try {
       // First check if the user is the author of the post
       const postRef = doc(this.firestore, 'posts', postId);
-      
+
       // Prepare the update data
       const updateData: Partial<BlogPost> = {
         ...updates,
         updatedAt: serverTimestamp(),
       };
-      
+
       // If the status is changing to published, set the publishedAt timestamp
       if (updates.status === 'published') {
         updateData.publishedAt = serverTimestamp();
       }
-      
+
       await updateDoc(postRef, updateData);
     } catch (error) {
       console.error('Error updating post:', error);
@@ -137,14 +137,14 @@ export class BlogService {
     try {
       const postsCollection = collection(this.firestore, 'posts');
       const q = query(
-        postsCollection, 
+        postsCollection,
         where('status', '==', 'published'),
         orderBy('publishedAt', 'desc'),
         limitQuery(limitCount)
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => {
         const data = doc.data() as DocumentData;
         return {
@@ -163,21 +163,21 @@ export class BlogService {
    */
   async getUserPosts(): Promise<BlogPost[]> {
     const user = this.authService.currentUser();
-    
+
     if (!user) {
       throw new Error('You must be logged in to view your posts');
     }
-    
+
     try {
       const postsCollection = collection(this.firestore, 'posts');
       const q = query(
-        postsCollection, 
+        postsCollection,
         where('authorId', '==', user.uid),
         orderBy('createdAt', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => {
         const data = doc.data() as DocumentData;
         return {
@@ -198,26 +198,28 @@ export class BlogService {
     try {
       const postRef = doc(this.firestore, 'posts', postId);
       const postSnap = await getDoc(postRef);
-      
+
       if (!postSnap.exists()) {
         return null;
       }
-      
+
       // Get the post data
-      const post = { id: postSnap.id, ...postSnap.data() } as BlogPost;
-      
+      const post = {
+        id: postSnap.id,
+        ...postSnap.data()
+      } as BlogPost;
+
       // Increment view count asynchronously (don't wait for it)
-      this.incrementViewCount(postId).catch(err => 
+      this.incrementViewCount(postId).catch(err =>
         console.error('Error incrementing view count:', err)
       );
-      
+
       return post;
     } catch (error) {
       console.error('Error fetching post by ID:', error);
       throw error;
     }
   }
-
   /**
    * Get posts by tag
    */
@@ -231,9 +233,9 @@ export class BlogService {
         orderBy('publishedAt', 'desc'),
         limitQuery(limitCount)
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => {
         return {
           id: doc.id,
@@ -259,9 +261,9 @@ export class BlogService {
         orderBy('publishedAt', 'desc'),
         limitQuery(limitCount)
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => {
         return {
           id: doc.id,
@@ -296,23 +298,23 @@ export class BlogService {
         startAfter,
         limit = 10
       } = options;
-      
+
       // Start building the query
       let postsQuery = collection(this.firestore, 'posts');
       let constraints: QueryConstraint[] = [
         where('status', '==', status)
       ];
-      
+
       // Add author filter if specified
       if (authorId) {
         constraints.push(where('authorId', '==', authorId));
       }
-      
+
       // Add tag filter if specified
       if (tag) {
         constraints.push(where('tags', 'array-contains', tag));
       }
-      
+
       // Add sorting
       switch (sort) {
         case 'latest':
@@ -325,42 +327,42 @@ export class BlogService {
           constraints.push(orderBy('views', 'desc'));
           break;
       }
-      
+
       // Add pagination if startAfter is provided
       if (startAfter) {
         constraints.push(startAfter(startAfter));
       }
-      
+
       // Add limit to query (using limitCount to avoid name collision)
       const limitCount = limit + 1; // Get one extra to check if there are more
       constraints.push(limitQuery(limitCount));
-      
+
       // Create the query
       const q = query(postsQuery, ...constraints);
-      
+
       // Execute the query
       const querySnapshot = await getDocs(q);
-      
+
       // Check if there are more results
       const hasMore = querySnapshot.docs.length > limit;
-      
+
       // Convert the query snapshot to posts
       const posts = querySnapshot.docs
         .slice(0, limit) // Remove the extra document we fetched to check for more
         .map(doc => ({ id: doc.id, ...doc.data() } as BlogPost));
-      
+
       // If search is specified, filter the results client-side
       // Note: In a real app, you might want to use a search service like Algolia for this
       let filteredPosts = posts;
       if (search) {
         const searchLower = search.toLowerCase();
-        filteredPosts = posts.filter(post => 
+        filteredPosts = posts.filter(post =>
           post.title.toLowerCase().includes(searchLower) ||
           post.content.toLowerCase().includes(searchLower) ||
           (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
         );
       }
-      
+
       return { posts: filteredPosts, hasMore };
     } catch (error) {
       console.error('Error fetching filtered posts:', error);
@@ -381,9 +383,9 @@ export class BlogService {
         where('status', '==', 'published'),
         limitQuery(100) // Limit to a reasonable number
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       // Extract tags from all posts and create a unique set
       const tagSet = new Set<string>();
       querySnapshot.docs.forEach(doc => {
@@ -392,7 +394,7 @@ export class BlogService {
           post.tags.forEach(tag => tagSet.add(tag));
         }
       });
-      
+
       // Convert set to array and sort alphabetically
       return Array.from(tagSet).sort();
     } catch (error) {
@@ -407,7 +409,7 @@ export class BlogService {
   async getRelatedPosts(postId: string, tags: string[], maxLimit: number = 3): Promise<BlogPost[]> {
     try {
       if (!tags.length) return [];
-      
+
       const postsRef = collection(this.firestore, 'posts');
       const q = query(
         postsRef,
@@ -418,9 +420,9 @@ export class BlogService {
         orderBy('publishedAt', 'desc'),
         limitQuery(maxLimit)
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BlogPost));
     } catch (error) {
       console.error('Error fetching related posts:', error);
@@ -442,21 +444,21 @@ export class BlogService {
         orderBy('publishedAt', 'desc'),
         limitQuery(100) // Fetch a larger set to filter client-side
       );
-      
+
       const querySnapshot = await getDocs(q);
-      
+
       const searchLower = searchTerm.toLowerCase();
-      
+
       // Filter posts that match the search term
       const matchingPosts = querySnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as BlogPost))
-        .filter(post => 
+        .filter(post =>
           post.title.toLowerCase().includes(searchLower) ||
           post.content.toLowerCase().includes(searchLower) ||
           (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
         )
         .slice(0, maxResults);
-      
+
       return matchingPosts;
     } catch (error) {
       console.error('Error searching posts:', error);
@@ -469,25 +471,25 @@ export class BlogService {
    */
   async likePost(postId: string): Promise<void> {
     const user = this.authService.currentUser();
-    
+
     if (!user) {
       throw new Error('You must be logged in to like a post');
     }
-    
+
     try {
       // In a real implementation, you'd need to check if the user has already liked the post
       // and maintain a collection of likes per post
-      
+
       const postRef = doc(this.firestore, 'posts', postId);
       const postSnap = await getDoc(postRef);
-      
+
       if (!postSnap.exists()) {
         throw new Error('Post not found');
       }
-      
+
       const post = postSnap.data() as BlogPost;
       const currentLikes = post.likes || 0;
-      
+
       await updateDoc(postRef, {
         likes: currentLikes + 1
       });
@@ -504,14 +506,14 @@ export class BlogService {
     try {
       const postRef = doc(this.firestore, 'posts', postId);
       const postSnap = await getDoc(postRef);
-      
+
       if (!postSnap.exists()) {
         throw new Error('Post not found');
       }
-      
+
       const post = postSnap.data() as BlogPost;
       const currentViews = post.views || 0;
-      
+
       await updateDoc(postRef, {
         views: currentViews + 1
       });
@@ -526,27 +528,27 @@ export class BlogService {
    */
   async deletePost(postId: string): Promise<void> {
     const user = this.authService.currentUser();
-    
+
     if (!user) {
       throw new Error('You must be logged in to delete a post');
     }
-    
+
     try {
       const postRef = doc(this.firestore, 'posts', postId);
       const postSnap = await getDoc(postRef);
-      
+
       if (!postSnap.exists()) {
         throw new Error('Post not found');
       }
-      
+
       const post = postSnap.data() as BlogPost;
-      
+
       // Check if user is author or admin
       const profile = this.authService.profile();
       if (post.authorId !== user.uid && profile?.role !== 'admin') {
         throw new Error('You do not have permission to delete this post');
       }
-      
+
       // For now we'll just update the post to be flagged as deleted
       // In a real implementation, you might want to move it to a deleted collection
       await updateDoc(postRef, {

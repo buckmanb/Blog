@@ -3,11 +3,11 @@
 ## Post Management Enhancements
 
 ### Edit Mode in CreatePostComponent
-- [ ] Modify `CreatePostComponent` to handle edit mode
-- [ ] Update component to load existing post data
-- [ ] Implement method in `BlogService` to get single post by ID
-- [ ] Handle form submission for updates vs. new posts
-- [ ] Update routes to pass post ID for editing
+- [X] Modify `CreatePostComponent` to handle edit mode
+- [X] Update component to load existing post data
+- [X] Implement method in `BlogService` to get single post by ID
+- [X] Handle form submission for updates vs. new posts
+- [X] Update routes to pass post ID for editing
 
 ### Code Syntax Highlighting
 - [ ] Add Prism.js library to the project
