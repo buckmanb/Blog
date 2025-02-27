@@ -29,7 +29,7 @@ import { NavbarComponent } from './layout/navbar.component';
       
       <footer class="footer">
         <div class="container">
-          <p>&copy; {{ currentYear }} Blog App. All rights reserved.</p>
+          <p>&copy; {{ currentYear }} Beau's Blog. All rights reserved.</p>
         </div>
       </footer>
     </div>

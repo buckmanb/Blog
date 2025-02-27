@@ -25,7 +25,7 @@ import { AuthService } from '../core/auth/auth.service';
     <mat-toolbar color="primary" class="navbar">
       <!-- Logo/Brand -->
       <a routerLink="/" class="brand">
-        <span class="site-name">Blog App</span>
+        <span class="site-name">Beau's Blog</span>
       </a>
       
       <!-- Spacer -->
