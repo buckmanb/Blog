@@ -128,3 +128,136 @@ html, body {
     background: var(--primary-darker);
   }
 }
+
+/* Editor content styles */
+.NgxEditor__Content {
+  font-family: 'Roboto', sans-serif;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.NgxEditor__Content h1 {
+  font-size: 2rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.NgxEditor__Content h2 {
+  font-size: 1.75rem;
+  margin: 1.25rem 0 0.75rem;
+}
+
+.NgxEditor__Content h3 {
+  font-size: 1.5rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.NgxEditor__Content h4 {
+  font-size: 1.25rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.NgxEditor__Content p {
+  margin: 0 0 1rem;
+}
+
+.NgxEditor__Content a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.NgxEditor__Content a:hover {
+  text-decoration: underline;
+}
+
+.NgxEditor__Content blockquote {
+  border-left: 4px solid var(--primary-lighter);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--text-secondary);
+}
+
+.NgxEditor__Content ul, 
+.NgxEditor__Content ol {
+  margin: 0 0 1rem 1.5rem;
+}
+
+.NgxEditor__Content pre {
+  background-color: var(--surface-color);
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.NgxEditor__Content code {
+  font-family: 'Courier New', Courier, monospace;
+  background-color: var(--surface-color);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+}
+
+.NgxEditor__Content pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+.NgxEditor__Content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1rem auto;
+}
+
+.NgxEditor__Content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.NgxEditor__Content th,
+.NgxEditor__Content td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem;
+}
+
+.NgxEditor__Content th {
+  background-color: var(--surface-color);
+}
+
+/* Preview content styles - apply the same styles as editor content */
+.preview-content {
+  font-family: 'Roboto', sans-serif;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.preview-content h1,
+.preview-content h2,
+.preview-content h3,
+.preview-content h4,
+.preview-content p,
+.preview-content a,
+.preview-content blockquote,
+.preview-content ul,
+.preview-content ol,
+.preview-content pre,
+.preview-content code,
+.preview-content img,
+.preview-content table,
+.preview-content th,
+.preview-content td {
+  /* Inherit same styles as editor content */
+}
+
+/* Prism.js syntax highlighting customization */
+code[class*="language-"],
+pre[class*="language-"] {
+  text-shadow: none;
+  border-radius: 4px;
+}
+
+/* Dark theme adjustments */
+.dark-theme code[class*="language-"],
+.dark-theme pre[class*="language-"] {
+  background-color: #2d2d2d !important;
+}

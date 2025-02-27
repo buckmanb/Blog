@@ -1,5 +1,5 @@
 // src/app/features/blog/blog-post-editor.component.ts
-import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -11,13 +11,19 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Editor, NgxEditorModule  } from 'ngx-editor';
+import { Editor, NgxEditorModule } from 'ngx-editor';
 import { CloudinaryUploadResult } from '../../core/services/cloudinary.service';
 import { ImageUploadComponent } from '../../shared/components/image-upload.component';
 import { CodeHighlightDirective } from '../../shared/directives/code-highlight.directive';
 import { BlogPost, BlogService } from '../../core/services/blog.service';
 import { ActivatedRoute, Router } from '@angular/router';
+import { EditorToolbarComponent } from '../../shared/components/editor-toolbar.component';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { EditorAutoSave } from '../../shared/components/editor-auto-save';
+// import { Prism } from 'prismjs';
 
 @Component({
   selector: 'app-blog-post-editor',
@@ -34,10 +40,14 @@ import { ActivatedRoute, Router } from '@angular/router';
     MatSnackBarModule,
     MatProgressSpinnerModule,
     MatCheckboxModule,
+    MatButtonToggleModule,
+    MatDialogModule,
     NgxEditorModule,
     ImageUploadComponent,
-    CodeHighlightDirective
+    CodeHighlightDirective,
+    EditorToolbarComponent
   ],
+  providers: [EditorAutoSave],
   template: `
     <div class="editor-container">
       <mat-card>
@@ -81,12 +91,35 @@ import { ActivatedRoute, Router } from '@angular/router';
             <!-- Content editor -->
             <div class="editor-section">
               <h3>Content</h3>
-              <ngx-editor
-                [editor]="editor"
-                formControlName="content"
-                [placeholder]="'Write your post content here...'"
-                >
-              </ngx-editor>
+              
+              <div class="editor-actions">
+                <mat-button-toggle-group [value]="editorMode">
+                  <mat-button-toggle value="edit" (click)="editorMode = 'edit'">Edit</mat-button-toggle>
+                  <mat-button-toggle value="preview" (click)="editorMode = 'preview'">Preview</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+              
+              <!-- Editor / Preview container -->
+              <div class="editor-preview-container">
+                <!-- Editor view -->
+                <div *ngIf="editorMode === 'edit'" class="editor-container">
+                <ng-template #customMenu>
+                  <app-editor-toolbar [editor]="editor"></app-editor-toolbar>
+                  </ng-template>
+                   <ngx-editor-menu [editor]="editor"  [customMenuRef]="customMenu"/>
+                  <ngx-editor
+                    [editor]="editor"
+                    formControlName="content"
+                    [placeholder]="'Write your post content here...'">
+                  </ngx-editor>
+                </div>
+                
+                <!-- Preview view -->
+                <div *ngIf="editorMode === 'preview'" class="preview-container">
+                  <div class="preview-content" [innerHTML]="sanitizedContent()"></div>
+                </div>
+              </div>
+              
               <mat-error *ngIf="postForm.get('content')?.hasError('required') && postForm.get('content')?.touched">
                 Content is required
               </mat-error>
@@ -202,12 +235,37 @@ import { ActivatedRoute, Router } from '@angular/router';
       color: var(--text-primary);
     }
     
+    .editor-preview-container {
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .editor-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 8px;
+    }
+    
+    .preview-container {
+      min-height: 400px;
+      padding: 16px;
+      background-color: var(--surface-color);
+    }
+    
+    .preview-content {
+      font-family: 'Roboto', sans-serif;
+      line-height: 1.6;
+    }
+    
     ::ng-deep .NgxEditor {
       min-height: 400px;
+      border: none !important;
     }
     
     ::ng-deep .NgxEditor__Content {
       min-height: 350px;
+      padding: 16px;
     }
     
     button mat-spinner {
@@ -216,14 +274,21 @@ import { ActivatedRoute, Router } from '@angular/router';
     }
   `]
 })
+
+
+
 export class BlogPostEditorComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private snackBar = inject(MatSnackBar);
   private blogService = inject(BlogService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
+  private autoSave = inject(EditorAutoSave);
+  private sanitizer = inject(DomSanitizer);
   
   editor: Editor = new Editor();
+
   postForm = this.fb.group({
     title: ['', Validators.required],
     excerpt: ['', Validators.maxLength(200)],
@@ -239,14 +304,64 @@ export class BlogPostEditorComponent implements OnInit, OnDestroy {
   isEditMode = false;
   currentPost?: BlogPost;
   postId?: string;
+  editorMode: 'edit' | 'preview' = 'edit';
   
   separatorKeysCodes: number[] = [ENTER, COMMA];
   
   ngOnInit() {
-    // Initialize the editor
+    // Initialize the editor with more robust configuration
     this.editor = new Editor({
       history: true,
-      keyboardShortcuts: true
+      keyboardShortcuts: true,
+      plugins: [
+        // ... other plugins
+        //codeBlock(), // Add code block plugin if available
+      ],
+      nodeViews: {
+        // Custom code block rendering
+        codeBlock: (node) => {
+          const dom = document.createElement('pre');
+          const content = document.createElement('code');
+          content.textContent = node.textContent;
+          dom.appendChild(content);
+          return {
+            dom,
+            contentDOM: content,
+            update: (node) => {
+              // Apply syntax highlighting when code block content changes
+              content.textContent = node.textContent;
+              // Prism.highlightElement(content);
+              return true;
+            }
+          };
+        }
+      }
+    });
+    this.editor.commands.insertText("Hello, World!");
+    this.editor.view.pasteText("HEllo World");
+    this.editor.setContent("Hello, World!");
+
+    // Check for auto-saved draft if not in edit mode
+    if (!this.isEditMode) {
+      const savedDraft = this.autoSave.getDraft();
+      if (savedDraft) {
+        // Ask the user if they want to restore the draft
+        const restore = confirm('Would you like to restore your unsaved draft?');
+        if (restore) {
+          this.postForm.patchValue({
+            content: savedDraft
+          });
+        } else {
+          this.autoSave.clearDraft();
+        }
+      }
+    }
+
+    // Subscribe to content changes for auto-save
+    this.postForm.get('content')?.valueChanges.subscribe(content => {
+      if (content && !this.isEditMode) {
+        this.autoSave.updateContent(content);
+      }
     });
     
     // Check if we're in edit mode by looking for an ID parameter
@@ -391,6 +506,9 @@ export class BlogPostEditorComponent implements OnInit, OnDestroy {
         // Create new post
         const newPostId = await this.blogService.createPost(post);
         
+        // Clear auto-saved draft after successful save
+        this.autoSave.clearDraft();
+        
         if (status === 'published') {
           this.snackBar.open('Post published successfully', 'Close', { duration: 3000 });
           // Navigate to the new post
@@ -417,5 +535,20 @@ export class BlogPostEditorComponent implements OnInit, OnDestroy {
       // Navigate back to posts list
       this.router.navigate(['/blog']);
     }
+  }
+  
+  sanitizedContent(): SafeHtml {
+    const content = this.postForm.get('content')?.value || '';
+    return this.sanitizer.bypassSecurityTrustHtml(content);
+  }    
+  
+  // Helper method to escape HTML special characters
+  private escapeHtml(unsafe: string): string {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 }
