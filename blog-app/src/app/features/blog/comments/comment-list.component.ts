@@ -1,39 +1,58 @@
 // src/app/features/blog/comments/comment-list.component.ts
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, inject, signal, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTabsModule } from '@angular/material/tabs';
 import { CommentService, Comment } from '../../../core/services/comment.service';
 import { CommentItemComponent } from './comment-item.component';
 import { CommentFormComponent } from './comment-form.component';
 import { AuthService } from '../../../core/auth/auth.service';
+import { InfiniteScrollDirective } from '../../../shared/directives/infinite-scroll.directive';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-comment-list',
   standalone: true,
   imports: [
     CommonModule,
+    RouterModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
     MatDividerModule,
+    MatProgressSpinnerModule,
+    MatTabsModule,
     CommentItemComponent,
-    CommentFormComponent
+    CommentFormComponent,
+    InfiniteScrollDirective
   ],
   template: `
     <div class="comments-container">
       <h2 class="comments-header">
-        Comments ({{ comments().length }})
+        Comments <span *ngIf="totalComments() > 0">({{ totalComments() }})</span>
       </h2>
       
       <!-- Comment form for logged in users -->
       <div class="comment-form-wrapper" *ngIf="isLoggedIn()">
-        <app-comment-form 
-          [postId]="postId" 
-          (commentAdded)="onCommentAdded($event)">
-        </app-comment-form>
+        <div *ngIf="showCommentForm()" class="comment-form-container">
+          <app-comment-form 
+            [postId]="postId" 
+            [autoFocus]="true"
+            (commentAdded)="onCommentAdded($event)"
+            (cancelEdit)="hideCommentForm()">
+          </app-comment-form>
+        </div>
+        <div *ngIf="!showCommentForm()" class="comment-trigger">
+          <button mat-stroked-button color="primary" (click)="showCommentFormTrigger($event)">
+            <mat-icon>comment</mat-icon>
+            Leave a comment
+          </button>
+        </div>
       </div>
       
       <!-- Login prompt for users not logged in -->
@@ -41,31 +60,104 @@ import { AuthService } from '../../../core/auth/auth.service';
         <p>Please <a routerLink="/auth/login">login</a> to leave a comment.</p>
       </div>
       
-      <!-- Comments list -->
-      <div class="comments-list">
-        <ng-container *ngIf="comments().length > 0; else noComments">
-          <app-comment-item 
-            *ngFor="let comment of comments()" 
-            [comment]="comment"
-            [postId]="postId"
-            (commentDeleted)="onCommentDeleted($event)"
-            (commentUpdated)="onCommentUpdated($event)">
-          </app-comment-item>
-        </ng-container>
-        
-        <ng-template #noComments>
-          <div class="no-comments-message">
+      <!-- Tabs for different comment views (for admins) -->
+      <mat-tab-group *ngIf="isAdmin()" (selectedTabChange)="onTabChange($event)">
+        <mat-tab label="All">
+          <ng-container *ngTemplateOutlet="commentsList"></ng-container>
+        </mat-tab>
+        <mat-tab label="Pending">
+          <div class="tab-content">
+            <div *ngIf="pendingLoading()" class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+            </div>
+            
+            <div *ngIf="!pendingLoading() && pendingComments().length === 0" class="empty-message">
+              <p>No pending comments.</p>
+            </div>
+            
+            <div *ngIf="!pendingLoading() && pendingComments().length > 0" class="comments-list">
+              <app-comment-item 
+                *ngFor="let comment of pendingComments()" 
+                [comment]="comment"
+                [postId]="postId"
+                [maxDepth]="maxDepth"
+                (commentDeleted)="onCommentDeleted($event)"
+                (commentUpdated)="onCommentUpdated($event)"
+                (replyAdded)="onReplyAdded($event)">
+              </app-comment-item>
+              
+              <div class="load-more" *ngIf="hasMorePending() && !loadingMore()">
+                <button mat-button color="primary" (click)="loadMorePending()">
+                  Load More
+                </button>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+        <mat-tab label="Flagged">
+          <div class="tab-content">
+            <div *ngIf="flaggedLoading()" class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+            </div>
+            
+            <div *ngIf="!flaggedLoading() && flaggedComments().length === 0" class="empty-message">
+              <p>No flagged comments.</p>
+            </div>
+            
+            <div *ngIf="!flaggedLoading() && flaggedComments().length > 0" class="comments-list">
+              <app-comment-item 
+                *ngFor="let comment of flaggedComments()" 
+                [comment]="comment"
+                [postId]="postId"
+                [maxDepth]="maxDepth"
+                (commentDeleted)="onCommentDeleted($event)"
+                (commentUpdated)="onCommentUpdated($event)"
+                (replyAdded)="onReplyAdded($event)">
+              </app-comment-item>
+              
+              <div class="load-more" *ngIf="hasMoreFlagged() && !loadingMore()">
+                <button mat-button color="primary" (click)="loadMoreFlagged()">
+                  Load More
+                </button>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+      
+      <!-- Regular comments list (non-admin view) -->
+      <ng-container *ngIf="!isAdmin()">
+        <ng-container *ngTemplateOutlet="commentsList"></ng-container>
+      </ng-container>
+      
+      <!-- Comments list template -->
+      <ng-template #commentsList>
+        <div class="comments-list-container" appInfiniteScroll (scrolled)="onScroll()">
+          <div *ngIf="loading()" class="loading-container">
+            <mat-spinner diameter="40"></mat-spinner>
+          </div>
+          
+          <div *ngIf="!loading() && comments().length === 0" class="empty-message">
             <p>No comments yet. Be the first to comment!</p>
           </div>
-        </ng-template>
-      </div>
-      
-      <!-- Load more button if there are more comments -->
-      <div class="load-more" *ngIf="hasMoreComments()">
-        <button mat-button color="primary" (click)="loadMoreComments()">
-          Load More Comments
-        </button>
-      </div>
+          
+          <div *ngIf="!loading() && comments().length > 0" class="comments-list">
+            <app-comment-item 
+              *ngFor="let comment of comments()" 
+              [comment]="comment"
+              [postId]="postId"
+              [maxDepth]="maxDepth"
+              (commentDeleted)="onCommentDeleted($event)"
+              (commentUpdated)="onCommentUpdated($event)"
+              (replyAdded)="onReplyAdded($event)">
+            </app-comment-item>
+            
+            <div class="load-more-indicator" *ngIf="loadingMore()">
+              <mat-spinner diameter="30"></mat-spinner>
+            </div>
+          </div>
+        </div>
+      </ng-template>
     </div>
   `,
   styles: [`
@@ -76,10 +168,24 @@ import { AuthService } from '../../../core/auth/auth.service';
     .comments-header {
       font-size: 1.5rem;
       margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
     }
     
     .comment-form-wrapper {
       margin-bottom: 24px;
+    }
+    
+    .comment-trigger {
+      display: flex;
+      margin-bottom: 16px;
+    }
+    
+    .comment-trigger button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
     }
     
     .login-prompt {
@@ -90,15 +196,27 @@ import { AuthService } from '../../../core/auth/auth.service';
       margin-bottom: 24px;
     }
     
+    .comments-list-container {
+      position: relative;
+      min-height: 100px;
+    }
+    
     .comments-list {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
     
-    .no-comments-message {
-      padding: 24px;
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 32px;
+    }
+    
+    .empty-message {
       text-align: center;
+      padding: 32px;
       color: var(--text-secondary);
     }
     
@@ -107,37 +225,120 @@ import { AuthService } from '../../../core/auth/auth.service';
       justify-content: center;
       margin-top: 16px;
     }
+    
+    .load-more-indicator {
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+    
+    .tab-content {
+      padding: 16px 0;
+    }
   `]
 })
-export class CommentListComponent implements OnInit {
+export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
   private commentService = inject(CommentService);
   private authService = inject(AuthService);
   
   @Input() postId!: string;
+  @Input() maxDepth: number = 10;
   
+  @ViewChild('commentsContainer') commentsContainer?: ElementRef;
+  
+  // Comment form visibility control
+  private _showCommentForm = signal<boolean>(false);
+  showCommentForm = this._showCommentForm.asReadonly();
+  
+  // Regular comments
   comments = signal<Comment[]>([]);
-  loading = signal<boolean>(false);
-  isLoggedIn = signal<boolean>(false);
-  hasMoreComments = signal<boolean>(false);
+  loading = signal<boolean>(true);
+  loadingMore = signal<boolean>(false);
+  hasMore = signal<boolean>(false);
+  totalComments = signal<number>(0);
+  lastVisible: any = null;
+  
+  // Moderation tabs (admin only)
+  pendingComments = signal<Comment[]>([]);
+  flaggedComments = signal<Comment[]>([]);
+  pendingLoading = signal<boolean>(false);
+  flaggedLoading = signal<boolean>(false);
+  hasMorePending = signal<boolean>(false);
+  hasMoreFlagged = signal<boolean>(false);
+  pendingLastVisible: any = null;
+  flaggedLastVisible: any = null;
+  
+  // Current active tab
+  activeTab = 0;
+  
+  // Subscription for real-time updates
+  private commentsSubscription?: Subscription;
   
   ngOnInit() {
-    // Check if user is logged in
-    this.isLoggedIn.set(!!this.authService.currentUser());
-    
     // Load initial comments
     this.loadComments();
+    
+    // For admins, also load pending comments
+    if (this.isAdmin()) {
+      this.loadPendingComments();
+    }
+  }
+  
+  ngAfterViewInit() {
+    // If we have a container reference, set up intersection observer for infinite scrolling
+  }
+  
+  ngOnDestroy() {
+    // Clear the comment service cache
+    this.commentService.clearCache();
+    
+    // Unsubscribe from real-time updates
+    if (this.commentsSubscription) {
+      this.commentsSubscription.unsubscribe();
+    }
+  }
+  
+  isLoggedIn(): boolean {
+    return !!this.authService.currentUser();
+  }
+  
+  isAdmin(): boolean {
+    return this.authService.profile()?.role === 'admin';
   }
   
   async loadComments() {
-    // TODO: Implement loading comments logic
-    
     try {
       this.loading.set(true);
-      const postComments = await this.commentService.getCommentsByPostId(this.postId);
-      this.comments.set(postComments);
       
-      // Check if there are potentially more comments to load
-      this.hasMoreComments.set(postComments.length >= 10); // Assuming we load 10 at a time
+      // Initial load uses real-time updates
+      const comments = await this.commentService.loadCommentsForPost(this.postId);
+      
+      // Filter for top-level comments only (no parent)
+      const topLevelComments = comments.filter(comment => !comment.parentId);
+      
+      this.comments.set(topLevelComments);
+      this.totalComments.set(comments.length);
+      
+      // Set up subscription for real-time updates
+      this.commentsSubscription = this.commentService.comments$.subscribe(updatedComments => {
+        // Filter for top-level comments only
+        const updatedTopLevel = updatedComments.filter(comment => !comment.parentId);
+        this.comments.set(updatedTopLevel);
+        this.totalComments.set(updatedComments.length);
+      });
+      
+      /*
+      // Paginated approach:
+      const { comments: topLevelComments, lastVisible } = 
+        await this.commentService.getTopLevelComments(this.postId);
+      
+      this.comments.set(topLevelComments);
+      this.lastVisible = lastVisible;
+      this.hasMore.set(topLevelComments.length >= 10); // Assuming batch size is 10
+      
+      // Get total comments count (would require a separate count query in Firestore)
+      this.totalComments.set(topLevelComments.length);
+      */
     } catch (error) {
       console.error('Error loading comments:', error);
     } finally {
@@ -145,24 +346,208 @@ export class CommentListComponent implements OnInit {
     }
   }
   
-  loadMoreComments() {
-    // TODO: Implement loading more comments logic
+  async loadMoreComments() {
+    if (!this.hasMore() || this.loadingMore() || !this.lastVisible) return;
+    
+    try {
+      this.loadingMore.set(true);
+      
+      const { comments: newComments, lastVisible } = 
+        await this.commentService.getTopLevelComments(this.postId, this.lastVisible);
+      
+      // Append new comments to existing ones
+      this.comments.update(current => [...current, ...newComments]);
+      
+      // Update pagination
+      this.lastVisible = lastVisible;
+      this.hasMore.set(newComments.length >= 10); // Assuming batch size is 10
+      
+      // Update total comments count
+      this.totalComments.update(count => count + newComments.length);
+    } catch (error) {
+      console.error('Error loading more comments:', error);
+    } finally {
+      this.loadingMore.set(false);
+    }
+  }
+  
+  async loadPendingComments() {
+    if (!this.isAdmin()) return;
+    
+    try {
+      this.pendingLoading.set(true);
+      
+      const { comments, lastVisible } = await this.commentService.getPendingComments();
+      
+      this.pendingComments.set(comments);
+      this.pendingLastVisible = lastVisible;
+      this.hasMorePending.set(comments.length >= 10); // Assuming batch size is 10
+    } catch (error) {
+      console.error('Error loading pending comments:', error);
+    } finally {
+      this.pendingLoading.set(false);
+    }
+  }
+  
+  async loadMorePending() {
+    if (!this.isAdmin() || !this.pendingLastVisible || this.loadingMore()) return;
+    
+    try {
+      this.loadingMore.set(true);
+      
+      const { comments, lastVisible } = 
+        await this.commentService.getPendingComments(this.pendingLastVisible);
+      
+      // Append new comments to existing ones
+      this.pendingComments.update(current => [...current, ...comments]);
+      
+      // Update pagination
+      this.pendingLastVisible = lastVisible;
+      this.hasMorePending.set(comments.length >= 10); // Assuming batch size is 10
+    } catch (error) {
+      console.error('Error loading more pending comments:', error);
+    } finally {
+      this.loadingMore.set(false);
+    }
+  }
+  
+  async loadFlaggedComments() {
+    if (!this.isAdmin()) return;
+    
+    try {
+      this.flaggedLoading.set(true);
+      
+      const { comments, lastVisible } = await this.commentService.getFlaggedComments();
+      
+      this.flaggedComments.set(comments);
+      this.flaggedLastVisible = lastVisible;
+      this.hasMoreFlagged.set(comments.length >= 10); // Assuming batch size is 10
+    } catch (error) {
+      console.error('Error loading flagged comments:', error);
+    } finally {
+      this.flaggedLoading.set(false);
+    }
+  }
+  
+  async loadMoreFlagged() {
+    if (!this.isAdmin() || !this.flaggedLastVisible || this.loadingMore()) return;
+    
+    try {
+      this.loadingMore.set(true);
+      
+      const { comments, lastVisible } = 
+        await this.commentService.getFlaggedComments(this.flaggedLastVisible);
+      
+      // Append new comments to existing ones
+      this.flaggedComments.update(current => [...current, ...comments]);
+      
+      // Update pagination
+      this.flaggedLastVisible = lastVisible;
+      this.hasMoreFlagged.set(comments.length >= 10); // Assuming batch size is 10
+    } catch (error) {
+      console.error('Error loading more flagged comments:', error);
+    } finally {
+      this.loadingMore.set(false);
+    }
+  }
+  
+  showCommentFormTrigger(event: MouseEvent) {
+    // Stop event propagation to prevent document click handler from firing
+    event.stopPropagation();
+    console.log('Showing comment form - stopped propagation');
+    this._showCommentForm.set(true);
+  }
+  
+  hideCommentForm() {
+    console.log('Hiding comment form');
+    this._showCommentForm.set(false);
   }
   
   onCommentAdded(comment: Comment) {
-    // TODO: Implement adding a new comment to the list
-    this.comments.update(comments => [comment, ...comments]);
+    // For top-level comments, add to the list
+    if (!comment.parentId) {
+      this.comments.update(comments => [comment, ...comments]);
+      this.totalComments.update(count => count + 1);
+      
+      // Hide the comment form after successful submission
+      this.hideCommentForm();
+    }
   }
   
   onCommentDeleted(commentId: string) {
-    // TODO: Implement removing a deleted comment from the list
+    // Remove from comments list
     this.comments.update(comments => comments.filter(c => c.id !== commentId));
+    this.totalComments.update(count => Math.max(0, count - 1));
+    
+    // If admin, also remove from moderation lists
+    if (this.isAdmin()) {
+      this.pendingComments.update(comments => comments.filter(c => c.id !== commentId));
+      this.flaggedComments.update(comments => comments.filter(c => c.id !== commentId));
+    }
   }
   
   onCommentUpdated(updatedComment: Comment) {
-    // TODO: Implement updating a comment in the list
+    // Update in comments list
     this.comments.update(comments => 
       comments.map(c => c.id === updatedComment.id ? updatedComment : c)
     );
+    
+    // If admin, also update in moderation lists
+    if (this.isAdmin()) {
+      // If status changed, move between lists
+      if (updatedComment.status === 'approved') {
+        this.pendingComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
+        this.flaggedComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
+      } else if (updatedComment.status === 'flagged') {
+        this.pendingComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
+        this.flaggedComments.update(comments => {
+          // Add if not already there
+          if (!comments.some(c => c.id === updatedComment.id)) {
+            return [updatedComment, ...comments];
+          }
+          // Otherwise update
+          return comments.map(c => c.id === updatedComment.id ? updatedComment : c);
+        });
+      } else if (updatedComment.status === 'pending') {
+        this.flaggedComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
+        this.pendingComments.update(comments => {
+          // Add if not already there
+          if (!comments.some(c => c.id === updatedComment.id)) {
+            return [updatedComment, ...comments];
+          }
+          // Otherwise update
+          return comments.map(c => c.id === updatedComment.id ? updatedComment : c);
+        });
+      }
+    }
+  }
+  
+  onReplyAdded(reply: Comment) {
+    // Don't need to do anything special for replies in the main list
+    // The parent comment will handle adding the reply to its replies list
+    // We just update the total count
+    this.totalComments.update(count => count + 1);
+  }
+  
+  onTabChange(event: any) {
+    this.activeTab = event.index;
+    
+    // Load data for the selected tab if it's not loaded yet
+    if (this.activeTab === 1 && this.pendingComments().length === 0 && !this.pendingLoading()) {
+      this.loadPendingComments();
+    } else if (this.activeTab === 2 && this.flaggedComments().length === 0 && !this.flaggedLoading()) {
+      this.loadFlaggedComments();
+    }
+  }
+  
+  onScroll() {
+    // Load more comments based on active tab
+    if (this.activeTab === 0) {
+      this.loadMoreComments();
+    } else if (this.activeTab === 1) {
+      this.loadMorePending();
+    } else if (this.activeTab === 2) {
+      this.loadMoreFlagged();
+    }
   }
 }

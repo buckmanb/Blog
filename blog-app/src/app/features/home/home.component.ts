@@ -25,8 +25,7 @@ import { BlogService, BlogPost } from '../../core/services/blog.service';
   template: `
     <div class="p-4">
       <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl">Welcome to my social media site, you can vist <a href="https://beaubuckman.com">beaubuckman.com</a> to contact me.</h1>
-        
+        <h1 class="text-2xl">Welcome to my social media site, you can vist <a href="https://beaubuckman.com">beaubuckman.com</a> to contact me.</h1>        
         <button mat-raised-button 
                 color="primary" 
                 routerLink="/blog/create"

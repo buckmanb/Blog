@@ -12,12 +12,21 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
+  deleteDoc,
   serverTimestamp,
-  DocumentData
+  increment,
+  DocumentData,
+  DocumentReference,
+  DocumentSnapshot,
+  QueryConstraint,
+  QueryDocumentSnapshot
 } from '@angular/fire/firestore';
 import { AuthService } from '../auth/auth.service';
-import { Observable, from, of } from 'rxjs';
+import { Observable, BehaviorSubject, from, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
+
+export type CommentStatus = 'pending' | 'approved' | 'flagged' | 'deleted';
 
 export interface Comment {
   id?: string;
@@ -27,10 +36,12 @@ export interface Comment {
   authorName: string;
   authorPhotoURL?: string;
   parentId?: string; // For threaded/nested replies
-  status: 'pending' | 'approved' | 'flagged';
+  depth: number; // Track nesting depth (0 for top-level, increments for replies)
+  status: CommentStatus;
   createdAt?: any;
   updatedAt?: any;
   likes?: number;
+  replyCount?: number; // Track number of direct replies
 }
 
 @Injectable({
@@ -39,51 +50,629 @@ export interface Comment {
 export class CommentService {
   private firestore = inject(Firestore);
   private authService = inject(AuthService);
+  
+  // Constants
+  private readonly BATCH_SIZE = 10; // Number of comments to load per batch
+  private readonly MAX_DEPTH = 10; // Maximum reply depth allowed
 
-  // TODO: Implement method to add a new comment
+  // For real-time updates (simplified approach)
+  private commentsSubject = new BehaviorSubject<Comment[]>([]);
+  public comments$ = this.commentsSubject.asObservable();
+  private loadedPostId: string | null = null;
+
+  /**
+   * Add a new comment
+   */
   async addComment(comment: Partial<Comment>): Promise<string> {
     const user = this.authService.currentUser();
     
     if (!user) {
       throw new Error('You must be logged in to add a comment');
     }
-
-    // TODO: Implement comment creation logic
-    
-    return 'comment-id';
+  
+    const profile = this.authService.profile();
+    if (!profile) {
+      throw new Error('User profile not found');
+    }
+  
+    try {
+      // Determine the comment depth
+      let depth = 0;
+      
+      // If it's a reply, get parent comment and increment depth
+      if (comment.parentId) {
+        const parentComment = await this.getCommentById(comment.parentId);
+        if (parentComment) {
+          depth = Math.min(parentComment.depth + 1, this.MAX_DEPTH);
+          
+          // Increment reply count on parent
+          await this.incrementReplyCount(comment.parentId);
+        }
+      }
+      
+      // Auto-approve comments from admin or author roles
+      const isAutoApprove = profile.role === 'admin' || profile.role === 'author';
+      
+      const commentsCollection = collection(this.firestore, 'comments');
+      
+      // Create a clean comment object without undefined values
+      const newComment: any = {
+        postId: comment.postId!,
+        content: comment.content!,
+        authorId: user.uid,
+        authorName: profile.displayName || user.displayName || 'Anonymous',
+        depth: depth,
+        status: isAutoApprove ? 'approved' : 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        likes: 0,
+        replyCount: 0
+      };
+      
+      // Only add parentId if it exists
+      if (comment.parentId) {
+        newComment.parentId = comment.parentId;
+      }
+      
+      // Only add authorPhotoURL if it exists
+      if (profile.photoURL || user.photoURL) {
+        newComment.authorPhotoURL = profile.photoURL || user.photoURL;
+      }
+      
+      const docRef = await addDoc(commentsCollection, newComment);
+      
+      // Don't add to local cache immediately as we'll get the update via subscription
+      // Instead, just return the ID
+      // Delete or comment out this block:
+      /*
+      // Update local cache for real-time updates if watching this post
+      if (this.loadedPostId === comment.postId) {
+        // Add the comment temporarily with a local timestamp
+        const localComment: Comment = {
+          ...newComment,
+          id: docRef.id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          parentId: comment.parentId  // This is safe here because it's a typed interface
+        };
+        
+        const currentComments = this.commentsSubject.value;
+        this.commentsSubject.next([...currentComments, localComment]);
+      }
+      */
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get a single comment by ID
+   */
+  async getCommentById(commentId: string): Promise<Comment | null> {
+    try {
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+      
+      if (!commentSnap.exists()) {
+        return null;
+      }
+      
+      return {
+        id: commentSnap.id,
+        ...commentSnap.data()
+      } as Comment;
+    } catch (error) {
+      console.error('Error getting comment:', error);
+      return null;
+    }
   }
 
-  // TODO: Implement method to get comments for a specific post
-  async getCommentsByPostId(postId: string): Promise<Comment[]> {
-    // TODO: Implement fetching comments for a post
-    
-    return [];
+  /**
+   * Get top-level comments for a post with pagination
+   */
+  async getTopLevelComments(postId: string, lastComment?: DocumentSnapshot<DocumentData>): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null}> {
+    try {
+      const commentsCollection = collection(this.firestore, 'comments');
+      
+      // Build query with proper typing
+      let queryConstraints: QueryConstraint[] = [
+        where('postId', '==', postId),
+        where('parentId', '==', null), // Top level comments only (no parent)
+        where('status', '==', 'approved'), // Only show approved comments
+        orderBy('createdAt', 'desc')
+      ];
+      
+      // Add pagination if we have a last comment
+      if (lastComment) {
+        queryConstraints.push(startAfter(lastComment));
+      }
+      
+      queryConstraints.push(limit(this.BATCH_SIZE));
+      
+      const q = query(commentsCollection, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const comments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Comment));
+      
+      // Get the last visible document for pagination
+      const lastVisible = querySnapshot.docs.length > 0 ? 
+        querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+      
+      return { comments, lastVisible };
+    } catch (error) {
+      console.error('Error getting comments:', error);
+      return { comments: [], lastVisible: null };
+    }
   }
 
-  // TODO: Implement method to get replies for a specific comment
-  async getRepliesByCommentId(commentId: string): Promise<Comment[]> {
-    // TODO: Implement fetching replies for a comment
-    
-    return [];
+  /**
+   * Get all comments for a post with real-time updates (simplified approach)
+   * This loads all approved comments for a post and subscribes for updates
+   */
+  async loadCommentsForPost(postId: string): Promise<Comment[]> {
+    try {
+      this.loadedPostId = postId;
+      
+      const commentsCollection = collection(this.firestore, 'comments');
+      const q = query(
+        commentsCollection,
+        where('postId', '==', postId),
+        where('status', '==', 'approved'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      const comments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Comment));
+      
+      // Update the subject
+      this.commentsSubject.next(comments);
+      
+      return comments;
+    } catch (error) {
+      console.error('Error loading comments for post:', error);
+      return [];
+    }
   }
 
-  // TODO: Implement method to update a comment
+  /**
+   * Get replies for a specific comment
+   */
+  async getRepliesByCommentId(commentId: string, lastComment?: DocumentSnapshot<DocumentData>): Promise<{replies: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null}> {
+    try {
+      const commentsCollection = collection(this.firestore, 'comments');
+      
+      // Build query with proper typing
+      let queryConstraints: QueryConstraint[] = [
+        where('parentId', '==', commentId),
+        where('status', '==', 'approved'),
+        orderBy('createdAt', 'asc') // Show oldest replies first
+      ];
+      
+      // Add pagination if we have a last comment
+      if (lastComment) {
+        queryConstraints.push(startAfter(lastComment));
+      }
+      
+      queryConstraints.push(limit(this.BATCH_SIZE));
+      
+      const q = query(commentsCollection, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const replies = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Comment));
+      
+      // Get the last visible document for pagination
+      const lastVisible = querySnapshot.docs.length > 0 ? 
+        querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+      
+      return { replies, lastVisible };
+    } catch (error) {
+      console.error('Error getting replies:', error);
+      return { replies: [], lastVisible: null };
+    }
+  }
+
+  /**
+   * Update a comment
+   */
   async updateComment(commentId: string, updates: Partial<Comment>): Promise<void> {
-    // TODO: Implement comment update logic
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to update a comment');
+    }
+    
+    try {
+      // First check if user is the author or an admin
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+      
+      if (!commentSnap.exists()) {
+        throw new Error('Comment not found');
+      }
+      
+      const comment = commentSnap.data() as Comment;
+      const profile = this.authService.profile();
+      
+      // Check if user is the author or admin
+      if (comment.authorId !== user.uid && profile?.role !== 'admin') {
+        throw new Error('You do not have permission to update this comment');
+      }
+      
+      // Prepare the update data
+      const updateData: Partial<Comment> = {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      };
+      
+      // If content was updated, set status back to pending for non-admins
+      if (updates.content && profile?.role !== 'admin') {
+        updateData.status = 'pending';
+      }
+      
+      await updateDoc(commentRef, updateData);
+      
+      // Update local cache for real-time updates
+      if (this.loadedPostId === comment.postId) {
+        const currentComments = this.commentsSubject.value;
+        
+        // Create a properly typed updated comment object
+        const updatedComment: Comment = { 
+          ...comment,
+          ...updates,
+          updatedAt: new Date(),
+          status: updateData.status || comment.status
+        };
+        
+        const updatedComments = currentComments.map(c => 
+          c.id === commentId ? updatedComment : c
+        );
+        
+        this.commentsSubject.next(updatedComments);
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      throw error;
+    }
   }
 
-  // TODO: Implement method to delete a comment
+  /**
+   * Delete a comment
+   */
   async deleteComment(commentId: string): Promise<void> {
-    // TODO: Implement comment deletion logic
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to delete a comment');
+    }
+    
+    try {
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+      
+      if (!commentSnap.exists()) {
+        throw new Error('Comment not found');
+      }
+      
+      const comment = commentSnap.data() as Comment;
+      const profile = this.authService.profile();
+      
+      // Check if user is the author or admin
+      if (comment.authorId !== user.uid && profile?.role !== 'admin') {
+        throw new Error('You do not have permission to delete this comment');
+      }
+      
+      // For comments with replies, mark as deleted but don't actually delete
+      if (comment.replyCount && comment.replyCount > 0) {
+        await updateDoc(commentRef, {
+          content: '[This comment has been deleted]',
+          status: 'deleted',
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // For comments with no replies, truly delete
+        await deleteDoc(commentRef);
+        
+        // If this is a reply, decrement the parent's reply count
+        if (comment.parentId) {
+          await this.decrementReplyCount(comment.parentId);
+        }
+      }
+      
+      // Update local cache for real-time updates
+      if (this.loadedPostId === comment.postId) {
+        const currentComments = this.commentsSubject.value;
+        
+        if (comment.replyCount && comment.replyCount > 0) {
+          // Mark as deleted in local cache
+          const updatedComments = currentComments.map(c => 
+            c.id === commentId ? { 
+              ...c, 
+              content: '[This comment has been deleted]', 
+              status: 'deleted' as CommentStatus,
+              updatedAt: new Date() 
+            } : c
+          );
+          this.commentsSubject.next(updatedComments);
+        } else {
+          // Remove from local cache
+          const filteredComments = currentComments.filter(c => c.id !== commentId);
+          this.commentsSubject.next(filteredComments);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      throw error;
+    }
   }
 
-  // TODO: Implement method to moderate a comment (approve/flag)
+  /**
+   * Moderate a comment (approve/flag)
+   */
   async moderateComment(commentId: string, status: 'approved' | 'flagged'): Promise<void> {
-    // TODO: Implement comment moderation logic
+    const profile = this.authService.profile();
+    
+    // Only admins can moderate comments
+    if (profile?.role !== 'admin') {
+      throw new Error('Only admins can moderate comments');
+    }
+    
+    try {
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      
+      await updateDoc(commentRef, {
+        status,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update local cache for real-time updates
+      const commentSnap = await getDoc(commentRef);
+      if (commentSnap.exists()) {
+        const commentData = commentSnap.data();
+        if (this.loadedPostId === commentData['postId']) {
+          const currentComments = this.commentsSubject.value;
+          const updatedComments = currentComments.map(c => 
+            c.id === commentId ? { ...c, status, updatedAt: new Date() } : c
+          );
+          this.commentsSubject.next(updatedComments);
+        }
+      }
+    } catch (error) {
+      console.error('Error moderating comment:', error);
+      throw error;
+    }
   }
 
-  // TODO: Implement method to like a comment
+  /**
+   * Like a comment
+   */
   async likeComment(commentId: string): Promise<void> {
-    // TODO: Implement comment liking logic
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to like a comment');
+    }
+    
+    try {
+      // In a real implementation, you'd need to check if the user has already liked the comment
+      // and maintain a collection of likes per comment
+      
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      
+      // Increment likes counter
+      await updateDoc(commentRef, {
+        likes: increment(1)
+      });
+      
+      // Update local cache for real-time updates
+      const commentSnap = await getDoc(commentRef);
+      if (commentSnap.exists()) {
+        const commentData = commentSnap.data();
+        if (this.loadedPostId === commentData['postId']) {
+          const currentComments = this.commentsSubject.value;
+          const updatedComments = currentComments.map(c => 
+            c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c
+          );
+          this.commentsSubject.next(updatedComments);
+        }
+      }
+    } catch (error) {
+      console.error('Error liking comment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get pending comments for moderation
+   */
+  async getPendingComments(lastComment?: DocumentSnapshot<DocumentData>): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null}> {
+    const profile = this.authService.profile();
+    
+    // Only admins can view pending comments
+    if (profile?.role !== 'admin') {
+      throw new Error('Only admins can view pending comments');
+    }
+    
+    try {
+      const commentsCollection = collection(this.firestore, 'comments');
+      
+      // Build query with proper typing
+      let queryConstraints: QueryConstraint[] = [
+        where('status', '==', 'pending'),
+        orderBy('createdAt', 'asc') // Oldest first
+      ];
+      
+      // Add pagination if we have a last comment
+      if (lastComment) {
+        queryConstraints.push(startAfter(lastComment));
+      }
+      
+      queryConstraints.push(limit(this.BATCH_SIZE));
+      
+      const q = query(commentsCollection, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const comments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Comment));
+      
+      // Get the last visible document for pagination
+      const lastVisible = querySnapshot.docs.length > 0 ? 
+        querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+      
+      return { comments, lastVisible };
+    } catch (error) {
+      console.error('Error getting pending comments:', error);
+      return { comments: [], lastVisible: null };
+    }
+  }
+
+  /**
+   * Get flagged comments for moderation
+   */
+  async getFlaggedComments(lastComment?: DocumentSnapshot<DocumentData>): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null}> {
+    const profile = this.authService.profile();
+    
+    // Only admins can view flagged comments
+    if (profile?.role !== 'admin') {
+      throw new Error('Only admins can view flagged comments');
+    }
+    
+    try {
+      const commentsCollection = collection(this.firestore, 'comments');
+      
+      // Build query with proper typing
+      let queryConstraints: QueryConstraint[] = [
+        where('status', '==', 'flagged'),
+        orderBy('updatedAt', 'desc') // Most recently flagged first
+      ];
+      
+      // Add pagination if we have a last comment
+      if (lastComment) {
+        queryConstraints.push(startAfter(lastComment));
+      }
+      
+      queryConstraints.push(limit(this.BATCH_SIZE));
+      
+      const q = query(commentsCollection, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const comments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Comment));
+      
+      // Get the last visible document for pagination
+      const lastVisible = querySnapshot.docs.length > 0 ? 
+        querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+      
+      return { comments, lastVisible };
+    } catch (error) {
+      console.error('Error getting flagged comments:', error);
+      return { comments: [], lastVisible: null };
+    }
+  }
+
+  /**
+   * Flag a comment by a user
+   */
+  async flagCommentByUser(commentId: string, reason: string): Promise<void> {
+    const user = this.authService.currentUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to flag a comment');
+    }
+    
+    try {
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      
+      // Create a flag record
+      const flagsCollection = collection(this.firestore, 'comment_flags');
+      await addDoc(flagsCollection, {
+        commentId,
+        userId: user.uid,
+        reason,
+        createdAt: serverTimestamp()
+      });
+      
+      // Mark the comment as flagged
+      await updateDoc(commentRef, {
+        status: 'flagged' as CommentStatus,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update local cache for real-time updates
+      const commentSnap = await getDoc(commentRef);
+      if (commentSnap.exists()) {
+        const commentData = commentSnap.data();
+        if (this.loadedPostId === commentData['postId']) {
+          const currentComments = this.commentsSubject.value;
+          const updatedComments = currentComments.map(c => 
+            c.id === commentId ? { ...c, status: 'flagged' as CommentStatus, updatedAt: new Date() } : c
+          );
+          this.commentsSubject.next(updatedComments);
+        }
+      }
+    } catch (error) {
+      console.error('Error flagging comment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper method to increment reply count on a parent comment
+   */
+  private async incrementReplyCount(commentId: string): Promise<void> {
+    try {
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      await updateDoc(commentRef, {
+        replyCount: increment(1)
+      });
+    } catch (error) {
+      console.error('Error incrementing reply count:', error);
+    }
+  }
+
+  /**
+   * Helper method to decrement reply count on a parent comment
+   */
+  private async decrementReplyCount(commentId: string): Promise<void> {
+    try {
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+      
+      if (commentSnap.exists()) {
+        const comment = commentSnap.data() as Comment;
+        const currentCount = comment.replyCount || 0;
+        
+        // Ensure we don't go below zero
+        await updateDoc(commentRef, {
+          replyCount: Math.max(0, currentCount - 1)
+        });
+      }
+    } catch (error) {
+      console.error('Error decrementing reply count:', error);
+    }
+  }
+
+  /**
+   * Clear comment cache when navigating away
+   */
+  clearCache(): void {
+    this.loadedPostId = null;
+    this.commentsSubject.next([]);
   }
 }
