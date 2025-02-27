@@ -14,7 +14,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Editor, NgxEditorModule } from 'ngx-editor';
+import { Editor, NgxEditorModule, Toolbar } from 'ngx-editor';
 import { CloudinaryUploadResult } from '../../core/services/cloudinary.service';
 import { ImageUploadComponent } from '../../shared/components/image-upload.component';
 import { CodeHighlightDirective } from '../../shared/directives/code-highlight.directive';
@@ -22,8 +22,13 @@ import { BlogPost, BlogService } from '../../core/services/blog.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EditorToolbarComponent } from '../../shared/components/editor-toolbar.component';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { EditorAutoSave } from '../../shared/components/editor-auto-save';
-// import { Prism } from 'prismjs';
+import { EditorAutoSave } from '../../shared/editor/auto-save';
+import { AbstractControl, FormControl, FormGroup } from '@angular/forms';
+
+import jsonDoc from '../../shared/editor/doc';
+import schema from '../../shared/editor/schema';
+import nodeViews from '../../shared/editor/nodeviews';
+import { CustomMenuComponent } from '../../shared/editor/custom-menu';
 
 @Component({
   selector: 'app-blog-post-editor',
@@ -45,7 +50,8 @@ import { EditorAutoSave } from '../../shared/components/editor-auto-save';
     NgxEditorModule,
     ImageUploadComponent,
     CodeHighlightDirective,
-    EditorToolbarComponent
+    EditorToolbarComponent,
+    CustomMenuComponent
   ],
   providers: [EditorAutoSave],
   template: `
@@ -103,16 +109,21 @@ import { EditorAutoSave } from '../../shared/components/editor-auto-save';
               <div class="editor-preview-container">
                 <!-- Editor view -->
                 <div *ngIf="editorMode === 'edit'" class="editor-container">
-                <ng-template #customMenu>
+                  <!-- Custom toolbar component -->
                   <app-editor-toolbar [editor]="editor"></app-editor-toolbar>
-                  </ng-template>
-                   <ngx-editor-menu [editor]="editor"  [customMenuRef]="customMenu"/>
+                  <ngx-editor-menu [editor]="editor" [toolbar]="toolbar" [customMenuRef]="customMenu"> </ngx-editor-menu>
+                  <!-- NgxEditor with built-in toolbar -->
                   <ngx-editor
                     [editor]="editor"
                     formControlName="content"
                     [placeholder]="'Write your post content here...'">
                   </ngx-editor>
                 </div>
+
+                <!-- custom menu -->
+                <ng-template #customMenu>
+                  <app-custom-menu [editor]="editor"></app-custom-menu>
+                </ng-template>
                 
                 <!-- Preview view -->
                 <div *ngIf="editorMode === 'preview'" class="preview-container">
@@ -274,9 +285,6 @@ import { EditorAutoSave } from '../../shared/components/editor-auto-save';
     }
   `]
 })
-
-
-
 export class BlogPostEditorComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private snackBar = inject(MatSnackBar);
@@ -287,8 +295,18 @@ export class BlogPostEditorComponent implements OnInit, OnDestroy {
   private autoSave = inject(EditorAutoSave);
   private sanitizer = inject(DomSanitizer);
   
-  editor: Editor = new Editor();
-
+  editor!: Editor;
+  // Define toolbar options
+  toolbar: Toolbar = [
+    ['bold', 'italic', 'underline', 'strike'],
+    ['blockquote', 'code'],
+    ['ordered_list', 'bullet_list'],
+    [{ heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] }],
+    ['link', 'image'],
+    ['text_color', 'background_color'],
+    ['align_left', 'align_center', 'align_right', 'align_justify'],
+  ];
+  
   postForm = this.fb.group({
     title: ['', Validators.required],
     excerpt: ['', Validators.maxLength(200)],
@@ -307,39 +325,23 @@ export class BlogPostEditorComponent implements OnInit, OnDestroy {
   editorMode: 'edit' | 'preview' = 'edit';
   
   separatorKeysCodes: number[] = [ENTER, COMMA];
+
+  form?: FormGroup;
   
   ngOnInit() {
-    // Initialize the editor with more robust configuration
-    this.editor = new Editor({
-      history: true,
-      keyboardShortcuts: true,
-      plugins: [
-        // ... other plugins
-        //codeBlock(), // Add code block plugin if available
-      ],
-      nodeViews: {
-        // Custom code block rendering
-        codeBlock: (node) => {
-          const dom = document.createElement('pre');
-          const content = document.createElement('code');
-          content.textContent = node.textContent;
-          dom.appendChild(content);
-          return {
-            dom,
-            contentDOM: content,
-            update: (node) => {
-              // Apply syntax highlighting when code block content changes
-              content.textContent = node.textContent;
-              // Prism.highlightElement(content);
-              return true;
-            }
-          };
-        }
-      }
+    // editordoc = jsonDoc;
+
+    this.form = new FormGroup({
+      editorContent: new FormControl(jsonDoc),
     });
-    this.editor.commands.insertText("Hello, World!");
-    this.editor.view.pasteText("HEllo World");
-    this.editor.setContent("Hello, World!");
+
+    // Initialize the editor
+    this.editor = new Editor({
+      schema,
+      nodeViews,
+      history: true,
+      keyboardShortcuts: true
+    });
 
     // Check for auto-saved draft if not in edit mode
     if (!this.isEditMode) {
@@ -540,15 +542,5 @@ export class BlogPostEditorComponent implements OnInit, OnDestroy {
   sanitizedContent(): SafeHtml {
     const content = this.postForm.get('content')?.value || '';
     return this.sanitizer.bypassSecurityTrustHtml(content);
-  }    
-  
-  // Helper method to escape HTML special characters
-  private escapeHtml(unsafe: string): string {
-    return unsafe
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
   }
 }

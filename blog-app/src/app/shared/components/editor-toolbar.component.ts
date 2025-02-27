@@ -1,19 +1,15 @@
 // src/app/shared/components/editor-toolbar.component.ts
-import { Component, Input, OnInit  } from '@angular/core';
+import { Component, Input, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Editor } from 'ngx-editor';
-import { isNodeActive } from 'ngx-editor/helpers';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { EditorImageDialogComponent, EditorImageResult } from './editor-image-dialog.component';
 import { CodeBlockDialogComponent, CodeBlockResult } from './code-block-dialog.component';
-
-import { setBlockType } from 'prosemirror-commands';
-import { EditorState, Plugin, PluginKey, Transaction } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
 
 @Component({
   selector: 'app-editor-toolbar',
@@ -24,72 +20,37 @@ import { EditorView } from 'prosemirror-view';
     MatIconModule,
     MatTooltipModule,
     MatDividerModule,
-    EditorImageDialogComponent    
+    MatMenuModule
   ],
   template: `
     <div class="editor-toolbar">
+      <!-- Custom toolbar features that aren't in the default NgxEditor toolbar -->
       <div class="toolbar-group">
-        <button mat-icon-button matTooltip="Bold" (click)="this.editor.commands.toggleBold().exec()">
-          <mat-icon>format_bold</mat-icon>
+        <!-- Enhanced image insertion -->
+        <button mat-icon-button matTooltip="Enhanced Image Upload" (click)="insertEnhancedImage()">
+          <mat-icon>add_photo_alternate</mat-icon>
         </button>
-        <button mat-icon-button matTooltip="Italic" (click)="this.editor.commands.toggleItalics().exec()">
-          <mat-icon>format_italic</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Underline" (click)="this.editor.commands.toggleUnderline().exec()">
-          <mat-icon>format_underlined</mat-icon>
-        </button>
-      </div>
-      
-      <mat-divider [vertical]="true"></mat-divider>
-      
-      <div class="toolbar-group">
-        <button mat-icon-button matTooltip="Heading 1" (click)="this.editor.commands.toggleHeading(1).exec()">
-          <mat-icon>looks_one</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Heading 2" (click)="this.editor.commands.toggleHeading(2).exec()">
-          <mat-icon>looks_two</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Heading 3" (click)="this.editor.commands.toggleHeading(3).exec()">
-          <mat-icon>looks_3</mat-icon>
-        </button>
-      </div>
-      
-      <mat-divider [vertical]="true"></mat-divider>
-      
-      <div class="toolbar-group">
-        <button mat-icon-button matTooltip="Bullet List" (click)="this.editor.commands.toggleBulletList().exec()">
-          <mat-icon>format_list_bulleted</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Numbered List" (click)="this.editor.commands.toggleOrderedList().exec()">
-          <mat-icon>format_list_numbered</mat-icon>
-        </button>
-      </div>
-      
-      <mat-divider [vertical]="true"></mat-divider>
-      
-      <div class="toolbar-group">
-        <button mat-icon-button matTooltip="Link" (click)="insertLink()">
-          <mat-icon>link</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Image" (click)="OnInsertImage()">
-          <mat-icon>image</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Code Block" (click)="onInsertCodeBlock()">
+        
+        <!-- Code block insertion -->
+        <button mat-icon-button matTooltip="Insert Code Block" (click)="insertCodeBlock()">
           <mat-icon>code</mat-icon>
         </button>
+        
+        <!-- Table insertion -->
+        <button mat-icon-button matTooltip="Insert Table" (click)="insertTable()">
+          <mat-icon>table_chart</mat-icon>
+        </button>
       </div>
       
       <mat-divider [vertical]="true"></mat-divider>
       
+      <!-- Indent/Outdent -->
       <div class="toolbar-group">
-        <button mat-icon-button matTooltip="Align Left" (click)="setTextAlign('left')">
-          <mat-icon>format_align_left</mat-icon>
+        <button mat-icon-button matTooltip="Decrease Indent" (click)="decreaseIndent()">
+          <mat-icon>format_indent_decrease</mat-icon>
         </button>
-        <button mat-icon-button matTooltip="Align Center" (click)="setTextAlign('center')">
-          <mat-icon>format_align_center</mat-icon>
-        </button>
-        <button mat-icon-button matTooltip="Align Right" (click)="setTextAlign('right')">
-          <mat-icon>format_align_right</mat-icon>
+        <button mat-icon-button matTooltip="Increase Indent" (click)="increaseIndent()">
+          <mat-icon>format_indent_increase</mat-icon>
         </button>
       </div>
     </div>
@@ -127,46 +88,13 @@ import { EditorView } from 'prosemirror-view';
 export class EditorToolbarComponent implements OnInit {
   @Input() editor!: Editor;
   
-  constructor(private dialog: MatDialog) {
-  }
-
-  isActive = false;
-  isDisabled = false;
-
-  onClick(e: MouseEvent): void {
-    e.preventDefault();
-    const { state, dispatch } = this.editor.view;
-    this.execute(state, dispatch);
-  }
-
-  execute(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
-    const { schema } = state;
-
-    if (this.isActive) {
-      // return setBlockType(schema.nodes.['paragraph'])(state, dispatch);
-    }
-
-    // return setBlockType(schema.nodes.code_mirror)(state, dispatch);
-    return true;
-  }
-
+  private dialog = inject(MatDialog);
   
   ngOnInit(): void {
-    const plugin = new Plugin({
-      key: new PluginKey(`custom-menu-codemirror`),
-      view: () => {
-        return {
-          // update: this.update,
-        };
-      },
-    });
-
-    this.editor.registerPlugin(plugin);
-  }  
-  OnInsertImage()
-  {
-
-
+    // Initialize any editor plugins or extensions if needed
+  }
+  
+  insertEnhancedImage() {
     const dialogRef = this.dialog.open(EditorImageDialogComponent, {
       width: '600px',
       maxWidth: '95vw'
@@ -174,36 +102,18 @@ export class EditorToolbarComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe((result: EditorImageResult | undefined) => {
       if (result) {
+        // Use the editor command to insert the image with additional attributes
         this.editor.commands.insertImage(result.src, {
           alt: result.alt,
-          // Include other attributes as needed
           title: result.title,
+          width: result.width?.toString() + 'px',
+          // height: result.height?.toString()
         }).exec();
-      }      
-    })
+      }
+    });
   }
   
-
-  insertLink() {
-    const url = prompt('Enter URL');
-    if (url) {
-
-      this.editor.commands.insertLink(url, { 
-                 href: url,
-                target: '_blank',
-                }
-      ).exec();              
-    }
-  }
-   
-  setTextAlign(align: 'left' | 'center' | 'right') {
-    // This is a simplified version - might need custom extension
-    document.execCommand('justifyLeft', false, '');
-    document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false, '');
-  }
-
-  onInsertCodeBlock() {
-
+  insertCodeBlock() {
     const dialogRef = this.dialog.open(CodeBlockDialogComponent, {
       width: '700px',
       maxWidth: '95vw'
@@ -213,13 +123,48 @@ export class EditorToolbarComponent implements OnInit {
       if (result) {
         // Create custom HTML for the code block with language
         const codeBlock = `
-          <pre><code class="language-${result.language}">${this.escapeHtml(result.code)}</code></pre>
+          <pre data-language="${result.language}"><code class="language-${result.language}">${this.escapeHtml(result.code)}</code></pre>
         `;
         
-        // Insert as HTML - this may require custom extension
+        // Insert as HTML
         this.editor.commands.insertHTML(codeBlock).exec();
       }
     });
+  }
+  
+  insertTable() {
+    // Simple 3x3 table
+    const tableHTML = `
+      <table style="width: 100%; border-collapse: collapse;">
+        <tbody>
+          <tr>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+            <td style="border: 1px solid var(--border-color); padding: 8px;"></td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+    
+    this.editor.commands.insertHTML(tableHTML).exec();
+  }
+  
+  decreaseIndent() {
+    document.execCommand('outdent', false);
+  }
+  
+  increaseIndent() {
+    document.execCommand('indent', false);
   }
   
   // Helper method to escape HTML special characters
@@ -231,5 +176,4 @@ export class EditorToolbarComponent implements OnInit {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
-
 }
