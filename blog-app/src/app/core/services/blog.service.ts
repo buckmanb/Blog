@@ -409,24 +409,37 @@ export class BlogService {
   async getRelatedPosts(postId: string, tags: string[], maxLimit: number = 3): Promise<BlogPost[]> {
     try {
       if (!tags.length) return [];
-
+  
+      // First, create a query to get posts with matching tags
       const postsRef = collection(this.firestore, 'posts');
-      const q = query(
+      
+      // We need to restructure our query to avoid the ordering issue
+      // When using "!=" with a document ID, we can't have additional orderBy clauses
+      // after ordering by document ID
+      
+      // Solution 1: Use two separate queries and merge results
+      // First query: Get posts with matching tags, ordered by publishedAt
+      const q1 = query(
         postsRef,
         where('status', '==', 'published'),
         where('tags', 'array-contains-any', tags),
-        where('__name__', '!=', postId), // Exclude the current post
-        orderBy('__name__'), // Need to order by ID for the != filter to work
         orderBy('publishedAt', 'desc'),
-        limitQuery(maxLimit)
+        limitQuery(maxLimit + 1) // Get one extra to account for potential current post
       );
-
-      const querySnapshot = await getDocs(q);
-
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BlogPost));
+  
+      const querySnapshot = await getDocs(q1);
+      
+      // Filter out the current post from results
+      const relatedPosts = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as BlogPost))
+        .filter(post => post.id !== postId)
+        .slice(0, maxLimit);
+  
+      return relatedPosts;
     } catch (error) {
       console.error('Error fetching related posts:', error);
-      throw error;
+      // Return empty array on error rather than throwing
+      return [];
     }
   }
 
