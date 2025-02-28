@@ -1,4 +1,3 @@
-// src/app/features/admin/admin.routes.ts
 import { Routes } from '@angular/router';
 
 export const ADMIN_ROUTES: Routes = [
@@ -16,5 +15,15 @@ export const ADMIN_ROUTES: Routes = [
     path: 'users',
     loadComponent: () => import('./admin-users.component')
       .then(m => m.AdminUsersComponent)
+  },
+  {
+    path: 'moderation',
+    loadComponent: () => import('./admin-moderation.component')
+      .then(m => m.AdminModerationComponent)
+  },
+  {
+    path: 'comments',
+    loadComponent: () => import('./admin-moderation.component')
+      .then(m => m.AdminModerationComponent)
   }
 ];

@@ -20,27 +20,29 @@ export const routes: Routes = [
     ]
   },
 
-  // Blog routes
-  {
+   // Blog routes
+   {
     path: 'blog',
     children: [
-      {
-        path: 'create',
-        component: BlogPostEditorComponent,
+      { 
+        path: 'create', 
+        loadComponent: () => import('./features/blog/blog-post-editor.component')
+          .then(m => m.BlogPostEditorComponent),
         canActivate: [authGuard, authorGuard]
       },
-      {
-        path: ':id/edit',
-        component: BlogPostEditorComponent,
-        canActivate: [authGuard, authorGuard]
+      { 
+        path: ':id/edit', 
+        loadComponent: () => import('./features/blog/blog-post-editor.component')
+          .then(m => m.BlogPostEditorComponent),
+        canActivate: [authGuard, authorGuard] 
       },
-      {
-        path: ':id',
+      { 
+        path: ':id', 
         loadComponent: () => import('./features/blog/post-detail.component')
           .then(m => m.PostDetailComponent)
       },
-      {
-        path: '',
+      { 
+        path: '', 
         loadComponent: () => import('./features/blog/post-list.component')
           .then(m => m.PostListComponent)
       }

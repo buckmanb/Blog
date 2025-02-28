@@ -14,6 +14,7 @@ import { CommentFormComponent } from './comment-form.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { InfiniteScrollDirective } from '../../../shared/directives/infinite-scroll.directive';
 import { Subscription } from 'rxjs';
+import { DocumentSnapshot, DocumentData } from '@angular/fire/firestore';
 
 @Component({
   selector: 'app-comment-list',
@@ -256,7 +257,7 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
   loadingMore = signal<boolean>(false);
   hasMore = signal<boolean>(false);
   totalComments = signal<number>(0);
-  lastVisible: any = null;
+  lastVisible: DocumentSnapshot<DocumentData> | null = null;
   
   // Moderation tabs (admin only)
   pendingComments = signal<Comment[]>([]);
@@ -265,8 +266,8 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
   flaggedLoading = signal<boolean>(false);
   hasMorePending = signal<boolean>(false);
   hasMoreFlagged = signal<boolean>(false);
-  pendingLastVisible: any = null;
-  flaggedLastVisible: any = null;
+  pendingLastVisible: DocumentSnapshot<DocumentData> | null = null;
+  flaggedLastVisible: DocumentSnapshot<DocumentData> | null = null;
   
   // Current active tab
   activeTab = 0;
@@ -326,19 +327,6 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
         this.comments.set(updatedTopLevel);
         this.totalComments.set(updatedComments.length);
       });
-      
-      /*
-      // Paginated approach:
-      const { comments: topLevelComments, lastVisible } = 
-        await this.commentService.getTopLevelComments(this.postId);
-      
-      this.comments.set(topLevelComments);
-      this.lastVisible = lastVisible;
-      this.hasMore.set(topLevelComments.length >= 10); // Assuming batch size is 10
-      
-      // Get total comments count (would require a separate count query in Firestore)
-      this.totalComments.set(topLevelComments.length);
-      */
     } catch (error) {
       console.error('Error loading comments:', error);
     } finally {
@@ -377,11 +365,13 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       this.pendingLoading.set(true);
       
-      const { comments, lastVisible } = await this.commentService.getPendingComments();
+      // Filter pending comments client-side for this post
+      const result = await this.commentService.getPendingComments();
+      const filteredComments = result.comments.filter(comment => comment.postId === this.postId);
       
-      this.pendingComments.set(comments);
-      this.pendingLastVisible = lastVisible;
-      this.hasMorePending.set(comments.length >= 10); // Assuming batch size is 10
+      this.pendingComments.set(filteredComments);
+      this.pendingLastVisible = result.lastVisible;
+      this.hasMorePending.set(result.comments.length >= 10); // Assuming batch size is 10
     } catch (error) {
       console.error('Error loading pending comments:', error);
     } finally {
@@ -395,15 +385,15 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       this.loadingMore.set(true);
       
-      const { comments, lastVisible } = 
-        await this.commentService.getPendingComments(this.pendingLastVisible);
+      const result = await this.commentService.getPendingComments(this.pendingLastVisible);
+      const filteredComments = result.comments.filter(comment => comment.postId === this.postId);
       
       // Append new comments to existing ones
-      this.pendingComments.update(current => [...current, ...comments]);
+      this.pendingComments.update(current => [...current, ...filteredComments]);
       
       // Update pagination
-      this.pendingLastVisible = lastVisible;
-      this.hasMorePending.set(comments.length >= 10); // Assuming batch size is 10
+      this.pendingLastVisible = result.lastVisible;
+      this.hasMorePending.set(result.comments.length >= 10); // Assuming batch size is 10
     } catch (error) {
       console.error('Error loading more pending comments:', error);
     } finally {
@@ -417,11 +407,13 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       this.flaggedLoading.set(true);
       
-      const { comments, lastVisible } = await this.commentService.getFlaggedComments();
+      // Filter flagged comments client-side for this post
+      const result = await this.commentService.getFlaggedComments();
+      const filteredComments = result.comments.filter(comment => comment.postId === this.postId);
       
-      this.flaggedComments.set(comments);
-      this.flaggedLastVisible = lastVisible;
-      this.hasMoreFlagged.set(comments.length >= 10); // Assuming batch size is 10
+      this.flaggedComments.set(filteredComments);
+      this.flaggedLastVisible = result.lastVisible;
+      this.hasMoreFlagged.set(result.comments.length >= 10); // Assuming batch size is 10
     } catch (error) {
       console.error('Error loading flagged comments:', error);
     } finally {
@@ -435,15 +427,15 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       this.loadingMore.set(true);
       
-      const { comments, lastVisible } = 
-        await this.commentService.getFlaggedComments(this.flaggedLastVisible);
+      const result = await this.commentService.getFlaggedComments(this.flaggedLastVisible);
+      const filteredComments = result.comments.filter(comment => comment.postId === this.postId);
       
       // Append new comments to existing ones
-      this.flaggedComments.update(current => [...current, ...comments]);
+      this.flaggedComments.update(current => [...current, ...filteredComments]);
       
       // Update pagination
-      this.flaggedLastVisible = lastVisible;
-      this.hasMoreFlagged.set(comments.length >= 10); // Assuming batch size is 10
+      this.flaggedLastVisible = result.lastVisible;
+      this.hasMoreFlagged.set(result.comments.length >= 10); // Assuming batch size is 10
     } catch (error) {
       console.error('Error loading more flagged comments:', error);
     } finally {
@@ -487,45 +479,64 @@ export class CommentListComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   
   onCommentUpdated(updatedComment: Comment) {
-    // Update in comments list
-    this.comments.update(comments => 
-      comments.map(c => c.id === updatedComment.id ? updatedComment : c)
-    );
+    // Update in comments list if it's a top-level comment
+    if (!updatedComment.parentId) {
+      this.comments.update(comments => 
+        comments.map(c => c.id === updatedComment.id ? updatedComment : c)
+      );
+    }
     
-    // If admin, also update in moderation lists
+    // If admin, handle moderation lists
     if (this.isAdmin()) {
-      // If status changed, move between lists
+      // Update or remove comment based on its status
       if (updatedComment.status === 'approved') {
+        // Remove from pending and flagged lists
         this.pendingComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
         this.flaggedComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
       } else if (updatedComment.status === 'flagged') {
+        // Remove from pending list
         this.pendingComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
+        
+        // Add or update in flagged list
         this.flaggedComments.update(comments => {
-          // Add if not already there
-          if (!comments.some(c => c.id === updatedComment.id)) {
+          const existingIndex = comments.findIndex(c => c.id === updatedComment.id);
+          if (existingIndex >= 0) {
+            // Update existing comment
+            return [
+              ...comments.slice(0, existingIndex),
+              updatedComment,
+              ...comments.slice(existingIndex + 1)
+            ];
+          } else {
+            // Add new comment
             return [updatedComment, ...comments];
           }
-          // Otherwise update
-          return comments.map(c => c.id === updatedComment.id ? updatedComment : c);
         });
       } else if (updatedComment.status === 'pending') {
+        // Remove from flagged list
         this.flaggedComments.update(comments => comments.filter(c => c.id !== updatedComment.id));
+        
+        // Add or update in pending list
         this.pendingComments.update(comments => {
-          // Add if not already there
-          if (!comments.some(c => c.id === updatedComment.id)) {
+          const existingIndex = comments.findIndex(c => c.id === updatedComment.id);
+          if (existingIndex >= 0) {
+            // Update existing comment
+            return [
+              ...comments.slice(0, existingIndex),
+              updatedComment,
+              ...comments.slice(existingIndex + 1)
+            ];
+          } else {
+            // Add new comment
             return [updatedComment, ...comments];
           }
-          // Otherwise update
-          return comments.map(c => c.id === updatedComment.id ? updatedComment : c);
         });
       }
     }
   }
   
   onReplyAdded(reply: Comment) {
-    // Don't need to do anything special for replies in the main list
-    // The parent comment will handle adding the reply to its replies list
-    // We just update the total count
+    // Increment total count
     this.totalComments.update(count => count + 1);
   }
   

@@ -20,10 +20,11 @@ import {
   DocumentReference,
   DocumentSnapshot,
   QueryConstraint,
-  QueryDocumentSnapshot
+  QueryDocumentSnapshot,
+  getCountFromServer
 } from '@angular/fire/firestore';
 import { AuthService } from '../auth/auth.service';
-import { Observable, BehaviorSubject, from, of } from 'rxjs';
+import { Observable, BehaviorSubject, from, of, throwError, Subject } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 
 export type CommentStatus = 'pending' | 'approved' | 'flagged' | 'deleted';
@@ -42,6 +43,14 @@ export interface Comment {
   updatedAt?: any;
   likes?: number;
   replyCount?: number; // Track number of direct replies
+  flagReason?: string; // The reason for flagging (if status is 'flagged')
+}
+
+export interface Flag {
+  commentId: string;
+  userId: string;
+  reason: string;
+  createdAt: any;
 }
 
 @Injectable({
@@ -58,6 +67,11 @@ export class CommentService {
   // For real-time updates (simplified approach)
   private commentsSubject = new BehaviorSubject<Comment[]>([]);
   public comments$ = this.commentsSubject.asObservable();
+  
+  // For moderation updates
+  private pendingCommentsSubject = new Subject<void>();
+  public pendingCommentsChanged$ = this.pendingCommentsSubject.asObservable();
+  
   private loadedPostId: string | null = null;
 
   /**
@@ -121,25 +135,10 @@ export class CommentService {
       
       const docRef = await addDoc(commentsCollection, newComment);
       
-      // Don't add to local cache immediately as we'll get the update via subscription
-      // Instead, just return the ID
-      // Delete or comment out this block:
-      /*
-      // Update local cache for real-time updates if watching this post
-      if (this.loadedPostId === comment.postId) {
-        // Add the comment temporarily with a local timestamp
-        const localComment: Comment = {
-          ...newComment,
-          id: docRef.id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          parentId: comment.parentId  // This is safe here because it's a typed interface
-        };
-        
-        const currentComments = this.commentsSubject.value;
-        this.commentsSubject.next([...currentComments, localComment]);
+      // Notify about pending comment if applicable
+      if (!isAutoApprove) {
+        this.pendingCommentsSubject.next();
       }
-      */
       
       return docRef.id;
     } catch (error) {
@@ -320,6 +319,9 @@ export class CommentService {
       // If content was updated, set status back to pending for non-admins
       if (updates.content && profile?.role !== 'admin') {
         updateData.status = 'pending';
+        
+        // Notify about pending comment
+        this.pendingCommentsSubject.next();
       }
       
       await updateDoc(commentRef, updateData);
@@ -333,6 +335,7 @@ export class CommentService {
           ...comment,
           ...updates,
           updatedAt: new Date(),
+          id: commentId,
           status: updateData.status || comment.status
         };
         
@@ -449,6 +452,9 @@ export class CommentService {
           this.commentsSubject.next(updatedComments);
         }
       }
+      
+      // Notify for comment status change
+      this.pendingCommentsSubject.next();
     } catch (error) {
       console.error('Error moderating comment:', error);
       throw error;
@@ -539,6 +545,26 @@ export class CommentService {
       return { comments: [], lastVisible: null };
     }
   }
+  
+  /**
+   * Get pending comments with count
+   */
+  async getPendingCommentsWithCount(): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null, count: number}> {
+    try {
+      const { comments, lastVisible } = await this.getPendingComments();
+      
+      // Get count of pending comments
+      const commentsCollection = collection(this.firestore, 'comments');
+      const countQuery = query(commentsCollection, where('status', '==', 'pending'));
+      const countSnapshot = await getCountFromServer(countQuery);
+      const count = countSnapshot.data().count;
+      
+      return { comments, lastVisible, count };
+    } catch (error) {
+      console.error('Error getting pending comments with count:', error);
+      return { comments: [], lastVisible: null, count: 0 };
+    }
+  }
 
   /**
    * Get flagged comments for moderation
@@ -585,6 +611,100 @@ export class CommentService {
       return { comments: [], lastVisible: null };
     }
   }
+  
+  /**
+   * Get flagged comments with count
+   */
+  async getFlaggedCommentsWithCount(): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null, count: number}> {
+    try {
+      const { comments, lastVisible } = await this.getFlaggedComments();
+      
+      // Get count of flagged comments
+      const commentsCollection = collection(this.firestore, 'comments');
+      const countQuery = query(commentsCollection, where('status', '==', 'flagged'));
+      const countSnapshot = await getCountFromServer(countQuery);
+      const count = countSnapshot.data().count;
+      
+      return { comments, lastVisible, count };
+    } catch (error) {
+      console.error('Error getting flagged comments with count:', error);
+      return { comments: [], lastVisible: null, count: 0 };
+    }
+  }
+  
+  /**
+   * Get recently approved comments
+   */
+  async getRecentlyApprovedComments(lastComment?: DocumentSnapshot<DocumentData>): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null}> {
+    const profile = this.authService.profile();
+    
+    // Only admins can view this list
+    if (profile?.role !== 'admin') {
+      throw new Error('Only admins can view this list');
+    }
+    
+    try {
+      const commentsCollection = collection(this.firestore, 'comments');
+      
+      // Build query with proper typing
+      let queryConstraints: QueryConstraint[] = [
+        where('status', '==', 'approved'),
+        orderBy('updatedAt', 'desc') // Most recently approved first
+      ];
+      
+      // Add pagination if we have a last comment
+      if (lastComment) {
+        queryConstraints.push(startAfter(lastComment));
+      }
+      
+      queryConstraints.push(limit(this.BATCH_SIZE));
+      
+      const q = query(commentsCollection, ...queryConstraints);
+      const querySnapshot = await getDocs(q);
+      
+      const comments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Comment));
+      
+      // Get the last visible document for pagination
+      const lastVisible = querySnapshot.docs.length > 0 ? 
+        querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+      
+      return { comments, lastVisible };
+    } catch (error) {
+      console.error('Error getting recently approved comments:', error);
+      return { comments: [], lastVisible: null };
+    }
+  }
+  
+  /**
+   * Get recently approved comments with count
+   */
+  async getRecentlyApprovedCommentsWithCount(): Promise<{comments: Comment[], lastVisible: DocumentSnapshot<DocumentData> | null, count: number}> {
+    try {
+      const { comments, lastVisible } = await this.getRecentlyApprovedComments();
+      
+      // Get count of recently approved comments (last 7 days)
+      const commentsCollection = collection(this.firestore, 'comments');
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const countQuery = query(
+        commentsCollection, 
+        where('status', '==', 'approved'),
+        where('updatedAt', '>=', sevenDaysAgo)
+      );
+      
+      const countSnapshot = await getCountFromServer(countQuery);
+      const count = countSnapshot.data().count;
+      
+      return { comments, lastVisible, count };
+    } catch (error) {
+      console.error('Error getting recently approved comments with count:', error);
+      return { comments: [], lastVisible: null, count: 0 };
+    }
+  }
 
   /**
    * Flag a comment by a user
@@ -598,6 +718,11 @@ export class CommentService {
     
     try {
       const commentRef = doc(this.firestore, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+      
+      if (!commentSnap.exists()) {
+        throw new Error('Comment not found');
+      }
       
       // Create a flag record
       const flagsCollection = collection(this.firestore, 'comment_flags');
@@ -611,20 +736,26 @@ export class CommentService {
       // Mark the comment as flagged
       await updateDoc(commentRef, {
         status: 'flagged' as CommentStatus,
+        flagReason: reason,
         updatedAt: serverTimestamp()
       });
       
+      // Notify for status change
+      this.pendingCommentsSubject.next();
+      
       // Update local cache for real-time updates
-      const commentSnap = await getDoc(commentRef);
-      if (commentSnap.exists()) {
-        const commentData = commentSnap.data();
-        if (this.loadedPostId === commentData['postId']) {
-          const currentComments = this.commentsSubject.value;
-          const updatedComments = currentComments.map(c => 
-            c.id === commentId ? { ...c, status: 'flagged' as CommentStatus, updatedAt: new Date() } : c
-          );
-          this.commentsSubject.next(updatedComments);
-        }
+      const comment = commentSnap.data() as Comment;
+      if (this.loadedPostId === comment.postId) {
+        const currentComments = this.commentsSubject.value;
+        const updatedComments = currentComments.map(c => 
+          c.id === commentId ? { 
+            ...c, 
+            status: 'flagged' as CommentStatus, 
+            flagReason: reason, 
+            updatedAt: new Date() 
+          } : c
+        );
+        this.commentsSubject.next(updatedComments);
       }
     } catch (error) {
       console.error('Error flagging comment:', error);

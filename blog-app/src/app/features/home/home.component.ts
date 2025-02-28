@@ -207,8 +207,11 @@ import { BlogService, BlogPost } from '../../core/services/blog.service';
     }
 
     .post-image {
-      height: 160px;
+      height: 200px;
+      width: 100%;
       object-fit: cover;
+      aspect-ratio: 16 / 9;
+      max-height: 250px;
     }
 
     .post-title {
