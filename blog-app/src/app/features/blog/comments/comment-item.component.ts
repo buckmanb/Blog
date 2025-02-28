@@ -162,6 +162,12 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
             </button>
           </div>
         </div>
+
+        <div *ngIf="!repliesLoading() && showReplies() && hasReplies()" class="toggle-replies">
+          <a href="#" (click)="toggleReplies(); $event.preventDefault()" class="reply-count-link">
+            Hide Replies
+          </a>
+        </div>
         
         <div *ngIf="!repliesLoading() && !showReplies() && hasReplies()" class="toggle-replies">
           <a href="#" (click)="toggleReplies(); $event.preventDefault()" class="reply-count-link">
