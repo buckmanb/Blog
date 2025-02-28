@@ -224,11 +224,12 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       &::after {
         content: '';
         position: absolute;
-        left: -10px;
+        left: -20px;
         top: 50%;
-        width: 10px;
+        width: 20px;
         height: 2px;
         background-color: rgba(0, 0, 0, 0.12);
+        transform: translateY(-50%);
       }
     }
     
