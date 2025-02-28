@@ -164,10 +164,9 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
         </div>
         
         <div *ngIf="!repliesLoading() && !showReplies() && hasReplies()" class="toggle-replies">
-          <button mat-button (click)="toggleReplies()">
-            <mat-icon>{{ showReplies() ? 'expand_less' : 'expand_more' }}</mat-icon>
-            {{ showRepliesButtonText() }}
-          </button>
+          <a href="#" (click)="toggleReplies(); $event.preventDefault()" class="reply-count-link">
+            View {{ comment.replyCount }} {{ comment.replyCount === 1 ? 'reply' : 'replies' }}
+          </a>
         </div>
       </div>
     </div>
@@ -301,6 +300,16 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
     
     .toggle-replies {
       margin-top: 8px;
+    }
+
+    .reply-count-link {
+      color: var(--primary-color);
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: 500;
+      &:hover {
+        text-decoration: underline;
+      }
     }
     
     .load-more {
@@ -503,14 +512,6 @@ export class CommentItemComponent implements OnInit {
   
   toggleReplies() {
     this.showReplies.update(value => !value);
-  }
-  
-  showRepliesButtonText(): string {
-    if (this.showReplies()) {
-      return 'Hide Replies';
-    } else {
-      return `Show ${this.comment.replyCount} ${this.comment.replyCount === 1 ? 'Reply' : 'Replies'}`;
-    }
   }
   
   async deleteComment() {
