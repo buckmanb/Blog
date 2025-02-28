@@ -364,16 +364,13 @@ export class CommentItemComponent implements OnInit {
   // Replies management
   replies = signal<Comment[]>([]);
   repliesLoading = signal<boolean>(false);
-  showReplies = signal<boolean>(true); // Initially show replies
+  showReplies = signal<boolean>(false); // Start with replies collapsed
   hasMoreReplies = signal<boolean>(false);
   loadingMoreReplies = signal<boolean>(false);
   lastVisibleReply: any = null;
   
   ngOnInit() {
-    // Load replies if this comment has any
-    if (this.comment.replyCount && this.comment.replyCount > 0) {
-      this.loadReplies();
-    }
+    // No initial load - replies will load when user clicks "View replies"
   }
   
   async loadReplies() {
@@ -516,7 +513,11 @@ export class CommentItemComponent implements OnInit {
     this.toggleReplyForm();
   }
   
-  toggleReplies() {
+  async toggleReplies() {
+    // Only load replies if we haven't loaded any yet
+    if (this.replies().length === 0 && this.comment.replyCount && this.comment.replyCount > 0) {
+      await this.loadReplies();
+    }
     this.showReplies.update(value => !value);
   }
   
