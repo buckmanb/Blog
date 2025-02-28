@@ -163,12 +163,6 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
           </div>
         </div>
 
-        <div *ngIf="!repliesLoading() && showReplies() && hasReplies() && comment.depth === 0" class="toggle-replies">
-          <a href="#" (click)="toggleReplies(); $event.preventDefault()" class="reply-count-link">
-            Hide Replies
-          </a>
-        </div>
-        
         <div *ngIf="!repliesLoading() && !showReplies() && hasReplies()" class="toggle-replies">
           <a href="#" (click)="toggleReplies(); $event.preventDefault()" class="reply-count-link">
             View {{ comment.replyCount }} {{ comment.replyCount === 1 ? 'reply' : 'replies' }}
@@ -181,12 +175,12 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
     .comment-container {
       position: relative;
       margin-bottom: 16px;
-      padding-left: 32px;
+      padding-left: 20px;
       
       &::before {
         content: '';
         position: absolute;
-        left: 0;
+        left: 10px;
         top: 0;
         bottom: 0;
         width: 2px;
@@ -230,9 +224,9 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       &::after {
         content: '';
         position: absolute;
-        left: -16px;
+        left: -10px;
         top: 50%;
-        width: 16px;
+        width: 10px;
         height: 2px;
         background-color: rgba(0, 0, 0, 0.12);
       }
@@ -346,23 +340,6 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       justify-content: center;
     }
 
-    /* Flattening deeply nested comments */
-    @media (max-width: 768px) {
-      .comment-container {
-        margin-left: 0 !important;
-      }
-      
-      .comment-card::before {
-        content: attr(data-depth);
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        background-color: var(--primary-color);
-        opacity: 0.5;
-      }
-    }
   `]
 })
 export class CommentItemComponent implements OnInit {
@@ -501,12 +478,9 @@ export class CommentItemComponent implements OnInit {
   }
   
   indentForDepth(depth: number): number {
-    // Mobile devices have no indent
-    if (window.innerWidth <= 768) return 0;
-    
-    // Desktop has indentation up to a limit
+    // Apply indentation on all devices
     const maxVisualDepth = 5; // Maximum visual indentation
-    return Math.min(depth, maxVisualDepth) * 32; // 32px per level
+    return Math.min(depth, maxVisualDepth) * 20; // 20px per level
   }
   
   startEditing() {
