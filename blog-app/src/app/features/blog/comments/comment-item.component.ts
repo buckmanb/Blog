@@ -174,17 +174,17 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
   styles: [`
     .comment-container {
       position: relative;
-      margin-bottom: 16px;
-      padding-left: 20px;
+      margin-bottom: 0;
+      padding-left: 32px;
       
       &::before {
         content: '';
         position: absolute;
-        left: 10px;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background-color: rgba(0, 0, 0, 0.12);
+        left: 22px;
+        top: -6px;
+        bottom: 24px;
+        border-left: 2px solid rgba(0, 0, 0, 0.1);
+        border-radius: 2px;
       }
     }
     
@@ -207,24 +207,13 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
     .author-info {
       display: flex;
       align-items: center;
-      gap: 12px;
-
-            &::after {
-        content: '';
-        position: absolute;
-        left: -20px;
-        top: 50%;
-        width: 20px;
-        height: 2px;
-        background-color: rgba(0, 0, 0, 0.12);
-        transform: translateY(-50%);
-      }
-
+      gap: 8px;
+      position: relative;
     }
     
     .author-avatar {
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       overflow: hidden;
       display: flex;
@@ -232,7 +221,21 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       justify-content: center;
       background-color: var(--surface-color);
       position: relative;
+      margin-right: 8px;
+      margin-left: -12px;
+      z-index: 1;
+      border: 2px solid white;
       
+      &::after {
+        content: '';
+        position: absolute;
+        left: -26px;
+        top: 14px;
+        height: 2px;
+        width: 24px;
+        border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+        border-radius: 0 0 0 4px;
+      }
     }
     
     .author-avatar img {
@@ -482,7 +485,7 @@ export class CommentItemComponent implements OnInit {
   
   indentForDepth(depth: number): number {
     // Apply indentation on all devices
-    const maxVisualDepth = 5; // Maximum visual indentation
+    const maxVisualDepth = 8; // Maximum visual indentation
     return Math.min(depth, maxVisualDepth) * 20; // 20px per level
   }
   
