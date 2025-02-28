@@ -208,6 +208,18 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       display: flex;
       align-items: center;
       gap: 12px;
+
+            &::after {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: 50%;
+        width: 20px;
+        height: 2px;
+        background-color: rgba(0, 0, 0, 0.12);
+        transform: translateY(-50%);
+      }
+
     }
     
     .author-avatar {
@@ -221,16 +233,6 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       background-color: var(--surface-color);
       position: relative;
       
-      &::after {
-        content: '';
-        position: absolute;
-        left: -20px;
-        top: 50%;
-        width: 20px;
-        height: 2px;
-        background-color: rgba(0, 0, 0, 0.12);
-        transform: translateY(-50%);
-      }
     }
     
     .author-avatar img {
