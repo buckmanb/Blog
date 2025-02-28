@@ -163,7 +163,7 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
           </div>
         </div>
 
-        <div *ngIf="!repliesLoading() && showReplies() && hasReplies()" class="toggle-replies">
+        <div *ngIf="!repliesLoading() && showReplies() && hasReplies() && comment.depth === 0" class="toggle-replies">
           <a href="#" (click)="toggleReplies(); $event.preventDefault()" class="reply-count-link">
             Hide Replies
           </a>
@@ -181,6 +181,17 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
     .comment-container {
       position: relative;
       margin-bottom: 16px;
+      padding-left: 32px;
+      
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background-color: rgba(0, 0, 0, 0.12);
+      }
     }
     
     .comment-card {
@@ -214,6 +225,17 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       align-items: center;
       justify-content: center;
       background-color: var(--surface-color);
+      position: relative;
+      
+      &::after {
+        content: '';
+        position: absolute;
+        left: -16px;
+        top: 50%;
+        width: 16px;
+        height: 2px;
+        background-color: rgba(0, 0, 0, 0.12);
+      }
     }
     
     .author-avatar img {
@@ -484,7 +506,7 @@ export class CommentItemComponent implements OnInit {
     
     // Desktop has indentation up to a limit
     const maxVisualDepth = 5; // Maximum visual indentation
-    return Math.min(depth, maxVisualDepth) * 20; // 20px per level
+    return Math.min(depth, maxVisualDepth) * 32; // 32px per level
   }
   
   startEditing() {
