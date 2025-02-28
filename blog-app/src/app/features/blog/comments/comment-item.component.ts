@@ -514,11 +514,11 @@ export class CommentItemComponent implements OnInit {
   }
   
   async toggleReplies() {
-    // Only load replies if we haven't loaded any yet
+    // Only load replies if we haven't loaded any yet - subsequent toggles just show/hide cached replies
     if (this.replies().length === 0 && this.comment.replyCount && this.comment.replyCount > 0) {
       await this.loadReplies();
     }
-    this.showReplies.update(value => !value);
+    this.showReplies.update(value => !value); // Just toggles visibility of already loaded replies
   }
   
   async deleteComment() {
