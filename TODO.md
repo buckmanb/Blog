@@ -9,6 +9,13 @@
 - [X] Handle form submission for updates vs. new posts
 - [X] Update routes to pass post ID for editing
 
+### Post editing features
+- [ ] Table support
+- [ ] Custom image size presets
+- [ ] Video embedding (Yahoo and Tiktok)
+- [ ] Markdown import/export
+- [ ] Word count statistics
+
 ### Code Syntax Highlighting
 - [ ] Add Prism.js library to the project
 - [ ] Complete the `CodeHighlightDirective` implementation
