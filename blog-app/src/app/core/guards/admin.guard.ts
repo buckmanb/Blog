@@ -1,4 +1,3 @@
-// src/app/core/guards/admin.guard.ts
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
@@ -15,7 +14,7 @@ export const adminGuard: CanActivateFn = (route, state) => {
         return true;
       }
       
-      // Not authorized as admin, redirect to home
+      // Not authorized as author, redirect to home
       router.navigate(['/']);
       return false;
     })

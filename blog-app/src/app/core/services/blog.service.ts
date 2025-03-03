@@ -15,7 +15,8 @@ import {
   serverTimestamp,
   DocumentData,
   QueryConstraint,
-  startAfter
+  startAfter,
+  getCountFromServer
 } from '@angular/fire/firestore';
 import { AuthService } from '../auth/auth.service';
 import { Observable, from, of, throwError } from 'rxjs';
@@ -52,6 +53,19 @@ export interface BlogPost {
 export class BlogService {
   private firestore = inject(Firestore);
   private authService = inject(AuthService);
+
+
+  // Add this method to get total post count
+  async getPostsCount(): Promise<number> {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      const snapshot = await getCountFromServer(postsCollection);
+      return snapshot.data().count;
+    } catch (error) {
+      console.error('Error getting posts count:', error);
+      return 0;
+    }
+  }
 
   /**
    * Create a new blog post

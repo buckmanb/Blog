@@ -66,7 +66,7 @@ import { AuthService } from '../core/auth/auth.service';
         @if (isLoggedIn()) {
           <button mat-icon-button [matMenuTriggerFor]="userMenu" aria-label="User menu" class="user-menu-trigger">
             @if (userPhoto()) {
-              <img [src]="user()?.photoURL" alt="Profile" class="user-avatar">
+              <img [src]="userPhoto()" alt="Profile" class="user-avatar" (error)="handleImageError($event)">
             } @else {
               <mat-icon>account_circle</mat-icon>
             }
@@ -155,155 +155,155 @@ import { AuthService } from '../core/auth/auth.service';
       </nav>
     </div>
   `,
- styles: [`
-  /* Navbar styles */
-  .navbar {
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    box-shadow: var(--elevation-1);
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    height: 64px;
-  }
-  
-  .brand {
-    text-decoration: none;
-    color: inherit;
-    display: flex;
-    align-items: center;
-  }
-  
-  .site-name {
-    font-size: 1.5rem;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    margin-left: 8px;
-  }
-  
-  .spacer {
-    flex: 1 1 auto;
-  }
-  
-  .nav-links {
-    display: flex;
-    gap: 8px;
-  }
-  
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  /* User avatar */
-  .user-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-  
-  /* User menu styles */
-  .user-menu-header {
-    padding: 16px;
-    min-width: 200px;
-  }
-  
-  .user-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  
-  .user-name {
-    margin: 0;
-    font-weight: 500;
-  }
-  
-  .user-email {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-  }
-  
-  /* Mobile menu styles */
-  .mobile-menu-button {
-    display: none;
-  }
-  
-  .mobile-menu {
-    position: fixed;
-    top: 64px;
-    left: 0;
-    right: 0;
-    background-color: var(--background-color);
-    height: 0;
-    overflow: hidden;
-    transition: height 0.3s ease;
-    z-index: 999;
-    box-shadow: var(--elevation-2);
-  }
-  
-  .mobile-menu.open {
-    height: calc(100vh - 64px);
-    overflow-y: auto;
-  }
-  
-  .mobile-menu nav {
-    display: flex;
-    flex-direction: column;
-    padding: 16px;
-  }
-  
-  .mobile-menu a {
-    padding: 16px;
-    text-decoration: none;
-    color: var(--text-primary);
-    font-size: 1.1rem;
-    border-bottom: 1px solid var(--border-color);
-  }
-  
-  .mobile-menu a.active {
-    color: var(--primary-color);
-    font-weight: 500;
-  }
-  
-  .sign-out-button {
-    margin-top: 16px;
-    padding: 16px;
-    background: none;
-    border: none;
-    text-align: left;
-    font-size: 1.1rem;
-    color: var(--error-color);
-    cursor: pointer;
-  }
-  
-  /* Active link styling */
-  .active {
-    font-weight: 500;
-  }
-  
-  /* Helper classes */
-  .hidden {
-    display: none !important;
-  }
-  
-  /* Responsive styles */
-  @media (max-width: 768px) {
+  styles: [`
+    /* Navbar styles */
+    .navbar {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      box-shadow: var(--elevation-1);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      height: 64px;
+    }
+    
+    .brand {
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      align-items: center;
+    }
+    
+    .site-name {
+      font-size: 1.5rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      margin-left: 8px;
+    }
+    
+    .spacer {
+      flex: 1 1 auto;
+    }
+    
     .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    /* User avatar */
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    
+    /* User menu styles */
+    .user-menu-header {
+      padding: 16px;
+      min-width: 200px;
+    }
+    
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .user-name {
+      margin: 0;
+      font-weight: 500;
+    }
+    
+    .user-email {
+      margin: 0;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+    
+    /* Mobile menu styles */
+    .mobile-menu-button {
       display: none;
     }
     
-    .mobile-menu-button {
-      display: block;
+    .mobile-menu {
+      position: fixed;
+      top: 64px;
+      left: 0;
+      right: 0;
+      background-color: var(--background-color);
+      height: 0;
+      overflow: hidden;
+      transition: height 0.3s ease;
+      z-index: 999;
+      box-shadow: var(--elevation-2);
     }
-  }
-`]
+    
+    .mobile-menu.open {
+      height: calc(100vh - 64px);
+      overflow-y: auto;
+    }
+    
+    .mobile-menu nav {
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+    }
+    
+    .mobile-menu a {
+      padding: 16px;
+      text-decoration: none;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .mobile-menu a.active {
+      color: var(--primary-color);
+      font-weight: 500;
+    }
+    
+    .sign-out-button {
+      margin-top: 16px;
+      padding: 16px;
+      background: none;
+      border: none;
+      text-align: left;
+      font-size: 1.1rem;
+      color: var(--error-color);
+      cursor: pointer;
+    }
+    
+    /* Active link styling */
+    .active {
+      font-weight: 500;
+    }
+    
+    /* Helper classes */
+    .hidden {
+      display: none !important;
+    }
+    
+    /* Responsive styles */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+      
+      .mobile-menu-button {
+        display: block;
+      }
+    }
+  `]
 })
 export class NavbarComponent implements OnInit {
   public themeService = inject(ThemeService);
@@ -316,7 +316,7 @@ export class NavbarComponent implements OnInit {
   // Memoized user photo to prevent multiple fetches
   userPhoto = computed(() => {
     const user = this.authService.currentUser();
-    return user?.photoURL || null;
+    return user?.photoURL?.trim() || null; // Ensure valid URL string
   });
 
   // Mobile menu state
@@ -373,7 +373,15 @@ export class NavbarComponent implements OnInit {
 
   handleImageError(event: ErrorEvent) {
     console.warn('Image load failed', event);
-    // Optionally set a default avatar or hide the image
-    (event.target as HTMLImageElement).src = 'path/to/default/avatar.png';
+    const img = event.target as HTMLImageElement;
+    
+    // Prevent infinite error loop
+    img.onerror = null; 
+    
+    // Clear invalid src to prevent retries
+    img.src = '';
+    
+    // Hide the image element
+    img.style.display = 'none';
   }
 }

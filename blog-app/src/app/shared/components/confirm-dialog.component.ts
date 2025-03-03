@@ -1,7 +1,6 @@
-// src/app/shared/components/confirm-dialog.component.ts
 import { Component, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 
 export interface ConfirmDialogData {
@@ -15,32 +14,33 @@ export interface ConfirmDialogData {
 @Component({
   selector: 'app-confirm-dialog',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatButtonModule
-  ],
+  imports: [CommonModule, MatDialogModule, MatButtonModule],
   template: `
     <h2 mat-dialog-title>{{ data.title }}</h2>
-    <div mat-dialog-content>
+    <mat-dialog-content>
       <p>{{ data.message }}</p>
-    </div>
-    <div mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>
-        {{ data.cancelButton || 'Cancel' }}
-      </button>
-      <button mat-raised-button [color]="data.color || 'primary'" [mat-dialog-close]="true">
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>{{ data.cancelButton || 'Cancel' }}</button>
+      <button 
+        mat-raised-button 
+        [color]="data.color || 'primary'" 
+        [mat-dialog-close]="true">
         {{ data.confirmButton || 'Confirm' }}
       </button>
-    </div>
+    </mat-dialog-actions>
   `,
   styles: [`
-    h2 {
-      margin-top: 0;
+    .mat-dialog-title {
+      margin: 0 0 16px;
     }
     
-    p {
-      margin-bottom: 0;
+    .mat-dialog-content {
+      margin: 0 0 24px;
+    }
+    
+    .mat-dialog-actions {
+      padding: 16px 0 0;
     }
   `]
 })

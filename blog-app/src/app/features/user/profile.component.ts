@@ -11,7 +11,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { ProfileImageUploadComponent } from '../../shared/components/profile-image-upload.component';
 import { CloudinaryUploadResult } from '../../core/services/cloudinary.service';
 import { AuthService } from '../../core/auth/auth.service';
-import { UserProfile } from '../../core/auth/auth.service';
+import { UserProfile } from '../../core/models/user-profile.model';
 
 @Component({
   selector: 'app-user-profile',

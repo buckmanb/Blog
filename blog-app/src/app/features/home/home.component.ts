@@ -1,4 +1,3 @@
-// src/app/features/home/home.component.ts
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
@@ -25,14 +24,24 @@ import { BlogService, BlogPost } from '../../core/services/blog.service';
   template: `
     <div class="p-4">
       <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl">Welcome to my social media site, you can vist <a href="https://beaubuckman.com">beaubuckman.com</a> to contact me.</h1>        
+        <h1 class="text-2xl font-medium text-gray-800 dark:text-gray-200">
+          Welcome to my social media site, you can visit 
+          <a href="https://beaubuckman.com" 
+             class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline transition-colors">
+            beaubuckman.com
+          </a> 
+          to contact me.
+        </h1>        
         <button mat-raised-button 
                 color="primary" 
                 routerLink="/blog/create"
-                class="create-post-btn"
-                *ngIf="authService.profile()?.role === 'admin' || authService.profile()?.role === 'author'">
-          <mat-icon>add</mat-icon>
-          Create Post
+                class="create-post-btn px-6 py-3 rounded-lg font-medium 
+                       bg-gradient-to-r from-blue-600 to-blue-400 
+                       hover:from-blue-700 hover:to-blue-500 
+                       transition-all shadow-md hover:shadow-lg
+                       flex items-center gap-2">
+          <mat-icon class="text-white">add</mat-icon>
+          <span class="text-white uppercase tracking-wide">Create Post</span>
         </button>
       </div>
 
@@ -108,9 +117,23 @@ import { BlogService, BlogPost } from '../../core/services/blog.service';
   `,
   styles: [`
     .create-post-btn {
+/*
       display: flex;
       align-items: center;
       gap: 8px;
+      */
+
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: translateY(0);
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+      }
+      
+      &:active {
+        transform: translateY(0);
+      }
     }
 
     .section-title {
@@ -288,7 +311,7 @@ import { BlogService, BlogPost } from '../../core/services/blog.service';
       .posts-grid {
         grid-template-columns: 1fr;
       }
-    }
+    }    
   `]
 })
 export class HomeComponent implements OnInit {

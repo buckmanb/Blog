@@ -1,4 +1,3 @@
-// src/app/core/auth/auth.service.ts
 import { Injectable, NgZone, inject, ApplicationRef } from '@angular/core';
 import { 
   Auth, 
@@ -9,7 +8,10 @@ import {
   signOut,
   user,
   updateProfile,
-  browserPopupRedirectResolver
+  browserPopupRedirectResolver,
+  sendSignInLinkToEmail,
+  sendPasswordResetEmail,
+  getAuth
 } from '@angular/fire/auth';
 import { 
   Firestore, 
@@ -19,7 +21,12 @@ import {
   docData,
   updateDoc,
   serverTimestamp,
-  enableIndexedDbPersistence
+  enableIndexedDbPersistence,
+  collection,
+  query,
+  where,
+  getDocs,
+  documentId
 } from '@angular/fire/firestore';
 import { Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -33,16 +40,7 @@ import {
   catchError 
 } from 'rxjs';
 import { ErrorService } from '../services/error.service';
-import { USE_EMULATOR as USE_AUTH_EMULATOR } from '@angular/fire/compat/auth';
-import { USE_EMULATOR as USE_FIRESTORE_EMULATOR } from '@angular/fire/compat/firestore';
-
-export interface UserProfile {
-  uid: string;
-  email: string;
-  displayName: string;
-  photoURL?: string;
-  role: 'admin' | 'author' | 'user';
-}
+import { UserProfile } from '../models/user-profile.model';
 
 @Injectable({
   providedIn: 'root',
@@ -54,9 +52,13 @@ export class AuthService {
   private ngZone = inject(NgZone);
   private errorService = inject(ErrorService);
   private app = inject(ApplicationRef);
+  
+  private readonly actionCodeSettings = {
+    url: `${window.location.origin}/auth/complete-signup`,
+    handleCodeInApp: true
+  };
 
   constructor() {
-    // Enable offline persistence
     enableIndexedDbPersistence(this.firestore)
       .catch((err) => {
         if (err.code == 'failed-precondition') {
@@ -66,7 +68,6 @@ export class AuthService {
         }
       });
 
-    // Add role logging for current user
     this.profile$.subscribe({
       next: (profile) => {
         if (profile) {
@@ -98,7 +99,6 @@ export class AuthService {
     const userRef = doc(this.firestore, `users/${uid}`);
     return docData(userRef, { idField: 'uid' }).pipe(
       map(data => {
-        // Type guard to check if the data is a valid UserProfile
         const isValidUserProfile = (profile: any): profile is UserProfile => {
           return (
             typeof profile === 'object' &&
@@ -150,7 +150,6 @@ export class AuthService {
         this.errorService.showSuccess('Successfully signed in!');
       });
 
-      // Trigger change detection
       this.app.tick();
     } catch (error) {
       console.error('❌ Google Sign-In Failed', error);
@@ -173,7 +172,6 @@ export class AuthService {
         this.errorService.showSuccess('Successfully signed in!');
       });
 
-      // Trigger change detection
       this.app.tick();
     } catch (error) {
       console.error('❌ Email Sign-In Failed', error);
@@ -197,12 +195,13 @@ export class AuthService {
         displayName
       });
 
+      await this.handleInviteSignUp(email);
+
       this.ngZone.run(() => {
         this.router.navigate(['/']);
         this.errorService.showSuccess('Account created successfully!');
       });
 
-      // Trigger change detection
       this.app.tick();
     } catch (error) {
       console.error('❌ Email Sign-Up Failed', error);
@@ -226,7 +225,6 @@ export class AuthService {
         this.errorService.showSuccess('Successfully signed out!');
       });
 
-      // Trigger change detection
       this.app.tick();
     } catch (error) {
       console.error('❌ Sign-Out Failed', error);
@@ -245,7 +243,9 @@ export class AuthService {
         email: user.email!,
         displayName: user.displayName || 'Anonymous',
         photoURL: user.photoURL,
-        role: 'user'
+        role: 'user',
+        isActive: true,
+        createdAt: serverTimestamp() as any // Firestore timestamp will be converted to Date when read
       };
 
       console.log('👤 Creating New User Profile', newProfile);
@@ -264,21 +264,18 @@ export class AuthService {
       console.log('Current User:', user.uid);
       console.log('Updates:', updates);
 
-      // Update display name in Firebase Auth if it's updated
       if (updates.displayName) {
         await updateProfile(user, {
           displayName: updates.displayName
         });
       }
       
-      // Update photo URL in Firebase Auth if it's updated
       if (updates.photoURL) {
         await updateProfile(user, {
           photoURL: updates.photoURL
         });
       }
       
-      // Update the user document in Firestore
       const userRef = doc(this.firestore, `users/${user.uid}`);
       await updateDoc(userRef, {
         ...updates,
@@ -287,15 +284,6 @@ export class AuthService {
       
       console.log('✅ Profile Updated Successfully');
       console.groupEnd();
-      
-      // Update the local profile data
-      if (this.profile()) {
-        const updatedProfile = {
-          ...this.profile()!,
-          ...updates
-        };
-        // Update the profile data
-      }
     } catch (error) {
       console.error('❌ Profile Update Error:', error);
       console.groupEnd();
@@ -303,7 +291,6 @@ export class AuthService {
     }
   }
 
-  // New method to explicitly log current user role
   logCurrentUserRole() {
     const profile = this.profile();
     if (profile) {
@@ -318,22 +305,73 @@ export class AuthService {
     }
   }
 
-  // Method to update user role with logging
-  async updateUserRole(uid: string, role: 'admin' | 'author' | 'user'): Promise<void> {
+  private isValidRole(role: string): boolean {
+    return ['admin', 'author', 'user'].includes(role);
+  }
+
+  async handleInviteSignUp(email: string) {
+    const role = localStorage.getItem('invitedRole');
+    if (role && this.isValidRole(role)) {
+      const user = this.currentUser();
+      if (user) {
+        await this.updateUserRole(user.uid, role as UserProfile['role']);
+        localStorage.removeItem('invitedRole');
+      }
+    }
+  }
+
+  async updateUserRole(uid: string, newRole: UserProfile['role']): Promise<void> {
+    const currentUser = this.currentUser();
+    if (!currentUser || this.profile()?.role !== 'admin') {
+      throw new Error('Unauthorized: Only admins can modify roles');
+    }
+
     try {
       console.group('🔄 Updating User Role');
-      console.log('Target UID:', uid);
-      console.log('New Role:', role);
-
       const userRef = doc(this.firestore, `users/${uid}`);
-      await updateDoc(userRef, { role });
+      const auditRef = doc(collection(this.firestore, 'roleChangeAudit'));
+      
+      await Promise.all([
+        updateDoc(userRef, { 
+          role: newRole,
+          updatedAt: serverTimestamp()
+        }),
+        setDoc(auditRef, {
+          userId: uid,
+          previousRole: this.profile()?.role,
+          newRole,
+          changedBy: currentUser.uid,
+          timestamp: serverTimestamp()
+        })
+      ]);
 
       console.log('✅ Role Updated Successfully');
-      console.groupEnd();
     } catch (error) {
       console.error('❌ Role Update Error:', error);
       console.groupEnd();
       throw error;
     }
+  }
+
+  async getAllUsers(): Promise<UserProfile[]> {
+    try {
+      const usersCollection = collection(this.firestore, 'users');
+      const q = query(usersCollection);
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data(),
+        isActive: true // Assuming active status managed differently
+      } as UserProfile));
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      throw error;
+    }
+  }
+
+  async sendPasswordResetEmail(email: string): Promise<void> {
+    const auth = getAuth();
+    await sendPasswordResetEmail(auth, email);
   }
 }

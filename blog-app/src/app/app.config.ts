@@ -1,4 +1,3 @@
-// src/app/app.config.ts
 import { ApplicationConfig } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
@@ -10,7 +9,7 @@ import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { getStorage, provideStorage } from '@angular/fire/storage';
 import { environment } from '../environments/environment';
 import { provideHttpClient } from '@angular/common/http';
-
+import { getFunctions, provideFunctions } from '@angular/fire/functions';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -20,6 +19,7 @@ export const appConfig: ApplicationConfig = {
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideAuth(() => getAuth()),
     provideFirestore(() => getFirestore()),
-    provideStorage(() => getStorage())
+    provideStorage(() => getStorage()),
+    provideFunctions(() => getFunctions()) // Added Functions provider
   ]
 };
