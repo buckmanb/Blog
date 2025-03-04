@@ -1,4 +1,3 @@
-// src/app/app.routes.ts
 import { Routes } from '@angular/router';
 import { LoginComponent } from './core/auth/login.component';
 import { SignupComponent } from './core/auth/signup.component';
