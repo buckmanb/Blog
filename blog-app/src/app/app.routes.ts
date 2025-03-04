@@ -3,8 +3,6 @@ import { Routes } from '@angular/router';
 import { LoginComponent } from './core/auth/login.component';
 import { SignupComponent } from './core/auth/signup.component';
 import { HomeComponent } from './features/home/home.component';
-import { BlogPostEditorComponent } from './features/blog/blog-post-editor.component';
-import { UserSettingsComponent } from './features/user/user-settings.component';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
 import { authorGuard } from './core/guards/author.guard';
