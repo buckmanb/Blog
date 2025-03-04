@@ -471,6 +471,11 @@ export class PostDetailComponent implements OnInit {
         // Add OpenGraph tags when post is loaded
         this.setOpenGraphTags(post);
 
+        setTimeout(() => {
+          this.setOpenGraphTags(post);
+        }, 1000);
+        
+
         // Parse content to identify and separate code blocks
         this.parseContent(post.content);
         

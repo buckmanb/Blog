@@ -31,8 +31,6 @@ export class OpenGraphService {
     
     // Set image if available
     if (shareData.image) {
-        console.log("Setting og:image" + shareData.image);
-        console.log("Setting og:title" + shareData.title);
       this.meta.updateTag({ property: 'og:image', content: shareData.image });
       this.meta.updateTag({ property: 'og:image:alt', content: shareData.title });
     }
