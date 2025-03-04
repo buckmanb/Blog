@@ -108,7 +108,7 @@ import { InviteUserDialogComponent } from './dialogs/invite-user-dialog.componen
           <ng-container matColumnDef="createdAt">
             <th mat-header-cell *matHeaderCellDef mat-sort-header>Joined</th>
             <td mat-cell *matCellDef="let user">
-              {{ user.createdAt ? (user.createdAt.toDate() | date:'mediumDate') : 'N/A' }}
+              {{ formatDate(user.createdAt) }}
             </td>
           </ng-container>
           
@@ -304,6 +304,30 @@ export class AdminUsersManagerComponent implements OnInit {
     });
   }
 
+  formatDate(timestamp: any): string {
+    if (!timestamp) return 'N/A';
+    
+    try {
+      // First, check if it's a Firestore Timestamp object with toDate method
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate().toLocaleDateString();
+      }
+      // If it's already a Date object
+      else if (timestamp instanceof Date) {
+        return timestamp.toLocaleDateString();
+      }
+      // If it's a string or number that can be parsed into a date
+      else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+        return new Date(timestamp).toLocaleDateString();
+      }
+      // Fallback for any other case
+      return 'N/A';
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'N/A';
+    }
+  }
+
   async updateUserRole(uid: string, newRole: string) {
     if (uid === this.currentUserUid()) {
       this.snackBar.open('You cannot change your own role.', 'Close', { duration: 3000 });
@@ -326,7 +350,7 @@ export class AdminUsersManagerComponent implements OnInit {
   viewUserDetails(user: UserProfile) {
     this.dialog.open(UserDetailDialogComponent, {
       width: '600px',
-      data: { userId: user.uid }  // Fixed data property name
+      data: { userId: user.uid }
     });
   }
 
