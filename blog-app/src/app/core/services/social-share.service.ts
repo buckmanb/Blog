@@ -17,7 +17,7 @@ export interface SocialShareData {
   providedIn: 'root'
 })
 export class SocialShareService {
-  private readonly appTitle = 'Blog App';
+  private readonly appTitle = 'Beau\'s Blog';
   private readonly appBaseUrl = window.location.origin;
 
   /**
