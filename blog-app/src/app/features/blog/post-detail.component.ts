@@ -496,6 +496,8 @@ export class PostDetailComponent implements OnInit {
       // Create share data using the SocialShareService
       const shareData = this.shareService.getShareDataFromPost(post);
       
+      console.log(shareData);
+
       // Set OpenGraph tags
       this.openGraphService.setOpenGraphTags(shareData);
     }
