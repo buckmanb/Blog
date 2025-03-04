@@ -1,5 +1,5 @@
 // src/app/features/blog/post-detail.component.ts
-import { Component, inject, signal, OnInit, ViewEncapsulation } from '@angular/core';
+import { Component, inject, signal, OnInit, OnDestroy, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -16,6 +16,9 @@ import { SocialShareService } from '../../core/services/social-share.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { CodeHighlightDirective } from '../../shared/directives/code-highlight.directive';
 import { CommentListComponent } from './comments/comment-list.component';
+import { ShareDialogComponent } from './share-dialog.component';
+import { SocialShareData } from '../../core/services/social-share.service';
+import { OpenGraphService } from '../../core/services/open-graph.service';
 
 // Interface for parsed content blocks
 interface ContentBlock {
@@ -40,7 +43,8 @@ interface ContentBlock {
     MatSnackBarModule,
     MatDialogModule,
     CodeHighlightDirective,
-    CommentListComponent
+    CommentListComponent,
+    ShareDialogComponent,
   ],
   encapsulation: ViewEncapsulation.None, // Required for styling highlighted code
   template: `
@@ -426,6 +430,9 @@ export class PostDetailComponent implements OnInit {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private shareService = inject(SocialShareService);
+
+  // Add OpenGraphService to the injected services
+  private openGraphService = inject(OpenGraphService);
   
   loading = signal<boolean>(true);
   post = signal<BlogPost | null>(null);
@@ -443,6 +450,14 @@ export class PostDetailComponent implements OnInit {
       }
     });
   }
+
+  ngOnDestroy() {
+    // Clear OpenGraph tags when navigating away from the post
+    this.openGraphService.clearOpenGraphTags();
+    
+    // Other cleanup from your existing ngOnDestroy
+    // this.subscriptions.forEach(sub => sub.unsubscribe());
+  }
   
   async loadPost(postId: string) {
     this.loading.set(true);
@@ -453,6 +468,9 @@ export class PostDetailComponent implements OnInit {
       if (post) {
         this.post.set(post);
         
+        // Add OpenGraph tags when post is loaded
+        this.setOpenGraphTags(post);
+
         // Parse content to identify and separate code blocks
         this.parseContent(post.content);
         
@@ -468,6 +486,19 @@ export class PostDetailComponent implements OnInit {
       this.loading.set(false);
     }
   }
+
+    /**
+   * Set OpenGraph tags for the current post
+   */
+    private setOpenGraphTags(post: BlogPost): void {
+      if (!post) return;
+      
+      // Create share data using the SocialShareService
+      const shareData = this.shareService.getShareDataFromPost(post);
+      
+      // Set OpenGraph tags
+      this.openGraphService.setOpenGraphTags(shareData);
+    }
   
   /**
    * Parse post content to separate text and code blocks
@@ -602,22 +633,28 @@ export class PostDetailComponent implements OnInit {
           url: shareData.url
         }).catch(error => {
           console.error('Error sharing:', error);
+          // Fallback to our custom dialog if Web Share API fails
+          this.openShareDialog(shareData);
         });
       } else {
-        // Fallback to copying the URL to clipboard
-        this.shareService.copyLinkToClipboard(shareData)
-          .then(success => {
-            if (success) {
-              this.snackBar.open('Link copied to clipboard', 'Close', { duration: 3000 });
-            } else {
-              this.snackBar.open('Failed to copy link', 'Close', { duration: 3000 });
-            }
-          });
+        // Use our custom share dialog
+        this.openShareDialog(shareData);
       }
     } catch (error) {
       console.error('Error sharing post:', error);
+      this.snackBar.open('Error sharing post', 'Close', { duration: 3000 });
     } finally {
       this.sharing.set(false);
     }
+  }
+  
+  /**
+   * Open the custom share dialog
+   */
+  private openShareDialog(shareData: SocialShareData): void {
+    this.dialog.open(ShareDialogComponent, {
+      width: '500px',
+      data: { shareData }
+    });
   }
 }

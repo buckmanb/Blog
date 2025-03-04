@@ -1,6 +1,6 @@
 // src/app/core/services/social-share.service.ts
 import { Injectable } from '@angular/core';
-import { BlogPost } from './blog.service';
+import { BlogPost } from '../../core/services/blog.service';
 
 export interface SocialShareData {
   url: string;
@@ -8,13 +8,16 @@ export interface SocialShareData {
   description?: string;
   image?: string;
   tags?: string[];
+  authorName?: string;
+  publishedDate?: Date;
+  siteName?: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class SocialShareService {
-  private readonly appTitle = 'Beau\'s Blog';
+  private readonly appTitle = 'Blog App';
   private readonly appBaseUrl = window.location.origin;
 
   /**
@@ -22,18 +25,42 @@ export class SocialShareService {
    */
   getShareDataFromPost(post: BlogPost): SocialShareData {
     // Create post URL
-    const postUrl = `${this.appBaseUrl}/Blog/blog/${post.id}`;
+    const postUrl = `${this.appBaseUrl}/blog/${post.id}`;
     
     // Create description from excerpt or content
     const description = post.excerpt || this.createExcerptFromContent(post.content);
+    
+    // Get image URL - ensure it's an absolute URL
+    const imageUrl = post.imageUrl ? this.ensureAbsoluteUrl(post.imageUrl) : undefined;
+    
+    // Create published date
+    const publishedDate = post.publishedAt?.toDate ? post.publishedAt.toDate() : new Date(post.publishedAt);
     
     return {
       url: postUrl,
       title: post.title,
       description,
-      image: post.imageUrl,
-      tags: post.tags
+      image: imageUrl,
+      tags: post.tags,
+      authorName: post.authorName,
+      publishedDate,
+      siteName: this.appTitle
     };
+  }
+  
+  /**
+   * Make sure a URL is absolute (needed for OpenGraph tags)
+   */
+  private ensureAbsoluteUrl(url: string): string {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    if (url.startsWith('/')) {
+      return `${this.appBaseUrl}${url}`;
+    }
+    
+    return `${this.appBaseUrl}/${url}`;
   }
   
   /**

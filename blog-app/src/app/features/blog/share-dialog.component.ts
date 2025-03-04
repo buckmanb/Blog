@@ -1,150 +1,265 @@
-// src/app/core/services/social-share.service.ts
-import { Injectable } from '@angular/core';
-import { BlogPost } from '../../core/services/blog.service';
-    
-export interface SocialShareData {
-  url: string;
-  title: string;
-  description?: string;
-  image?: string;
-  tags?: string[];
+import { Component, Inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { SocialShareService, SocialShareData } from '../../core/services/social-share.service';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+
+export interface ShareDialogData {
+  shareData: SocialShareData;
 }
 
-@Injectable({
-  providedIn: 'root'
-})
-export class SocialShareService {
-  private readonly appTitle = 'Blog App';
-  private readonly appBaseUrl = window.location.origin;
-
-  /**
-   * Generate sharing data from a blog post
-   */
-  getShareDataFromPost(post: BlogPost): SocialShareData {
-    // Create post URL
-    const postUrl = `${this.appBaseUrl}/blog/${post.id}`;
-    
-    // Create description from excerpt or content
-    const description = post.excerpt || this.createExcerptFromContent(post.content);
-    
-    return {
-      url: postUrl,
-      title: post.title,
-      description,
-      image: post.imageUrl,
-      tags: post.tags
-    };
-  }
-  
-  /**
-   * Share to Facebook
-   */
-  shareToFacebook(data: SocialShareData): void {
-    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(data.url)}`;
-    this.openShareWindow(url, 'facebook-share');
-  }
-  
-  /**
-   * Share to Twitter
-   */
-  shareToTwitter(data: SocialShareData): void {
-    const text = `${data.title}`;
-    const hashtags = data.tags?.join(',') || '';
-    
-    const url = `https://twitter.com/intent/tweet?url=${encodeURIComponent(data.url)}&text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}`;
-    this.openShareWindow(url, 'twitter-share');
-  }
-  
-  /**
-   * Share to LinkedIn
-   */
-  shareToLinkedIn(data: SocialShareData): void {
-    const url = `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(data.url)}&title=${encodeURIComponent(data.title)}&summary=${encodeURIComponent(data.description || '')}`;
-    this.openShareWindow(url, 'linkedin-share');
-  }
-  
-  /**
-   * Share via Email
-   */
-  shareViaEmail(data: SocialShareData): void {
-    const subject = encodeURIComponent(`${data.title} | ${this.appTitle}`);
-    const body = encodeURIComponent(`I thought you might be interested in this:\n\n${data.title}\n${data.description}\n\nRead more: ${data.url}`);
-    
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  }
-  
-  /**
-   * Create a shareable preview card that can be used on social media
-   */
-  createShareablePreviewCard(post: BlogPost): string {
-    // Create an HTML blob for social media sites
-    const html = `
-      <div style="border: 1px solid #ddd; border-radius: 8px; max-width: 500px; font-family: Arial, sans-serif;">
-        ${post.imageUrl ? `<img src="${post.imageUrl}" alt="${post.title}" style="width: 100%; border-radius: 8px 8px 0 0; object-fit: cover; height: 250px;" />` : ''}
-        <div style="padding: 16px;">
-          <h2 style="margin-top: 0; color: #333;">${post.title}</h2>
-          <p style="color: #666;">${post.excerpt || this.createExcerptFromContent(post.content)}</p>
-          <div style="display: flex; align-items: center; margin-top: 16px;">
-            ${post.authorPhotoURL ? `<img src="${post.authorPhotoURL}" alt="${post.authorName}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 8px;" />` : ''}
-            <div>
-              <div style="font-weight: bold;">${post.authorName}</div>
-              <div style="font-size: 0.8rem; color: #888;">${this.formatDate(post.publishedAt)}</div>
+@Component({
+  selector: 'app-share-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatSnackBarModule
+  ],
+  template: `
+    <h2 mat-dialog-title>Share This Post</h2>
+    <div mat-dialog-content>
+      <div class="share-preview">
+        <div class="preview-header">Preview</div>
+        <div class="preview-card">
+          <!-- OpenGraph-style preview card -->
+          <div *ngIf="shareData.image" class="preview-image">
+            <img [src]="shareData.image" [alt]="shareData.title">
+          </div>
+          <div class="preview-content">
+            <h3 class="preview-title">{{ shareData.title }}</h3>
+            <p class="preview-description">{{ shareData.description }}</p>
+            <div class="preview-meta">
+              <span>{{ shareData.siteName || 'Blog App' }}</span>
             </div>
           </div>
         </div>
       </div>
-    `;
+      
+      <div class="share-options">
+        <button mat-raised-button color="primary" class="share-button facebook" (click)="shareToFacebook()">
+          <mat-icon>facebook</mat-icon>
+          Share on Facebook
+        </button>
+        
+        <button mat-raised-button color="primary" class="share-button twitter" (click)="shareToTwitter()">
+          <mat-icon>twitter</mat-icon>
+          Share on Twitter
+        </button>
+        
+        <button mat-raised-button color="primary" class="share-button linkedin" (click)="shareToLinkedIn()">
+          <mat-icon>linkedin</mat-icon>
+          Share on LinkedIn
+        </button>
+        
+        <button mat-raised-button color="primary" class="share-button email" (click)="shareViaEmail()">
+          <mat-icon>email</mat-icon>
+          Share via Email
+        </button>
+        
+        <button mat-raised-button class="share-button copy" (click)="copyLink()">
+          <mat-icon>content_copy</mat-icon>
+          Copy Link
+        </button>
+      </div>
+      
+      <div class="embed-code" *ngIf="embedHtml">
+        <h3>Embed Code</h3>
+        <div class="code-container">
+          <pre>{{ embedHtml }}</pre>
+        </div>
+        <button mat-button color="primary" (click)="copyEmbedCode()">
+          <mat-icon>content_copy</mat-icon> Copy Embed Code
+        </button>
+      </div>
+    </div>
+    <div mat-dialog-actions align="end">
+      <button mat-button (click)="close()">Close</button>
+    </div>
+  `,
+  styles: [`
+    .share-preview {
+      margin-bottom: 20px;
+    }
     
-    return html;
+    .preview-header {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    
+    .preview-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .preview-image img {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+    }
+    
+    .preview-content {
+      padding: 16px;
+    }
+    
+    .preview-title {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    
+    .preview-description {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #666;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .preview-meta {
+      font-size: 12px;
+      color: #888;
+    }
+    
+    .share-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .share-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .facebook {
+      background-color: #1877f2;
+      color: white;
+    }
+    
+    .twitter {
+      background-color: #1da1f2;
+      color: white;
+    }
+    
+    .linkedin {
+      background-color: #0077b5;
+      color: white;
+    }
+    
+    .email {
+      background-color: #ea4335;
+      color: white;
+    }
+    
+    .copy {
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    
+    .embed-code {
+      margin-top: 20px;
+    }
+    
+    .code-container {
+      background-color: #f5f5f5;
+      padding: 12px;
+      border-radius: 4px;
+      max-height: 100px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+    
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin: 0;
+      font-size: 12px;
+    }
+  `]
+})
+export class ShareDialogComponent {
+  shareData: SocialShareData;
+  embedHtml: string;
+  
+  constructor(
+    private dialogRef: MatDialogRef<ShareDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: ShareDialogData,
+    private shareService: SocialShareService,
+    private snackBar: MatSnackBar,
+    private sanitizer: DomSanitizer
+  ) {
+    this.shareData = data.shareData;
+    
+    // Create embeddable HTML snippet
+    this.embedHtml = this.createEmbedCode();
   }
   
-  /**
-   * Copy link to clipboard
-   */
-  async copyLinkToClipboard(data: SocialShareData): Promise<boolean> {
+  shareToFacebook(): void {
+    this.shareService.shareToFacebook(this.shareData);
+  }
+  
+  shareToTwitter(): void {
+    this.shareService.shareToTwitter(this.shareData);
+  }
+  
+  shareToLinkedIn(): void {
+    this.shareService.shareToLinkedIn(this.shareData);
+  }
+  
+  shareViaEmail(): void {
+    this.shareService.shareViaEmail(this.shareData);
+  }
+  
+  async copyLink(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(data.url);
-      return true;
+      const success = await this.shareService.copyLinkToClipboard(this.shareData);
+      if (success) {
+        this.snackBar.open('Link copied to clipboard', 'Close', { duration: 3000 });
+      } else {
+        this.snackBar.open('Failed to copy link', 'Close', { duration: 3000 });
+      }
     } catch (error) {
-      console.error('Failed to copy:', error);
-      return false;
+      console.error('Error copying link:', error);
+      this.snackBar.open('Failed to copy link', 'Close', { duration: 3000 });
     }
   }
   
-  /**
-   * Helper to open share windows
-   */
-  private openShareWindow(url: string, name: string): void {
-    window.open(
-      url,
-      name,
-      'width=600,height=400,location=0,menubar=0,toolbar=0,status=0,scrollbars=1,resizable=1'
-    );
+  async copyEmbedCode(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.embedHtml);
+      this.snackBar.open('Embed code copied to clipboard', 'Close', { duration: 3000 });
+    } catch (error) {
+      console.error('Failed to copy embed code:', error);
+      this.snackBar.open('Failed to copy embed code', 'Close', { duration: 3000 });
+    }
   }
   
-  /**
-   * Helper to create excerpt from content
-   */
-  private createExcerptFromContent(content: string, maxLength: number = 150): string {
-    // Strip HTML tags
-    const plainText = content.replace(/<[^>]*>/g, '');
-    // Truncate if necessary
-    return plainText.length > maxLength
-      ? plainText.substring(0, maxLength) + '...'
-      : plainText;
+  createEmbedCode(): string {
+    return `<div style="border: 1px solid #ddd; border-radius: 8px; max-width: 500px; font-family: Arial, sans-serif;">
+  ${this.shareData.image ? `<img src="${this.shareData.image}" alt="${this.shareData.title}" style="width: 100%; border-radius: 8px 8px 0 0; object-fit: cover; height: 250px;" />` : ''}
+  <div style="padding: 16px;">
+    <h2 style="margin-top: 0; color: #333;">${this.shareData.title}</h2>
+    <p style="color: #666;">${this.shareData.description}</p>
+    <a href="${this.shareData.url}" style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 12px;">Read More</a>
+  </div>
+</div>`;
   }
   
-  /**
-   * Helper to format date
-   */
-  private formatDate(timestamp: any): string {
-    if (!timestamp) return '';
-    
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric', 
-      year: 'numeric'
-    });
+  close(): void {
+    this.dialogRef.close();
   }
 }
