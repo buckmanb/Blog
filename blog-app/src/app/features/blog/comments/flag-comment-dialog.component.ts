@@ -11,6 +11,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { CommentService } from '../../../core/services/comment.service';
 
 export interface FlagCommentDialogData {
+  width: string;
   commentId: string;
 }
 
@@ -83,9 +84,8 @@ export class FlagCommentDialogComponent {
   private fb = inject(FormBuilder);
   private commentService = inject(CommentService);
   private dialogRef = inject(MatDialogRef<FlagCommentDialogComponent>);
-  
-  @Inject(MAT_DIALOG_DATA) public data!: FlagCommentDialogData;
-  
+  private commentId: string = '';
+    
   submitting = signal<boolean>(false);
   
   flagForm = this.fb.group({
@@ -93,7 +93,13 @@ export class FlagCommentDialogComponent {
     explanation: ['']
   });
   
-  constructor() {
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: FlagCommentDialogData
+  ) {
+    // this.commentId = this.data.commentId;
+
+    console.debug(data.commentId);
+
     // Add conditional validation for explanation
     this.flagForm.get('reason')?.valueChanges.subscribe(reason => {
       const explanationControl = this.flagForm.get('explanation');

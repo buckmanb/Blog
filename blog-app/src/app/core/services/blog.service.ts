@@ -534,7 +534,7 @@ export class BlogService {
         // User already liked the post, remove the like
         const likeDoc = userLikeSnapshot.docs[0];
         await deleteDoc(doc(this.firestore, 'posts', postId, 'likes', likeDoc.id));
-        
+
         // Decrement the post's like count
         const post = postSnapshot.data() as BlogPost;
         await updateDoc(postDoc, {

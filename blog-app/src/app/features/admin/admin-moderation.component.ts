@@ -129,6 +129,7 @@ import { Subscription } from 'rxjs';
                   
                   <div class="flag-reason" *ngIf="comment.flagReason">
                     <mat-chip color="warn" selected>{{ comment.flagReason }}</mat-chip>
+                    <mat-chip *ngIf="comment.flaggedBy" color="warn" selected>Flagged by: {{ comment.flaggedBy }}</mat-chip>
                   </div>
                 </mat-card-header>
                 
@@ -382,8 +383,8 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
       });
       // TODO: Redirect to home page
       return;
-    }
-    
+    }    
+
     // Initialize all tabs with counts
     this.initializeAllTabCounts();
 

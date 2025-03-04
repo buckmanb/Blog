@@ -44,6 +44,7 @@ export interface Comment {
   likes?: number;
   replyCount?: number; // Track number of direct replies
   flagReason?: string; // The reason for flagging (if status is 'flagged')
+  flaggedBy?: string;
 }
 
 export interface Flag {
@@ -725,18 +726,19 @@ export class CommentService {
       }
       
       // Create a flag record
-      const flagsCollection = collection(this.firestore, 'comment_flags');
-      await addDoc(flagsCollection, {
-        commentId,
-        userId: user.uid,
-        reason,
-        createdAt: serverTimestamp()
-      });
+      // const flagsCollection = collection(this.firestore, 'comment_flags');
+      // await addDoc(flagsCollection, {
+      //   commentId,
+      //   flaggedBy: user.uid,
+      //   reason,
+      //   createdAt: serverTimestamp()
+      // });
       
       // Mark the comment as flagged
       await updateDoc(commentRef, {
         status: 'flagged' as CommentStatus,
         flagReason: reason,
+        flaggedBy: user.uid,
         updatedAt: serverTimestamp()
       });
       
