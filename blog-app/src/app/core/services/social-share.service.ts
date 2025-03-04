@@ -22,7 +22,7 @@ export class SocialShareService {
    */
   getShareDataFromPost(post: BlogPost): SocialShareData {
     // Create post URL
-    const postUrl = `${this.appBaseUrl}/blog/${post.id}`;
+    const postUrl = `${this.appBaseUrl}/Blog/blog/${post.id}`;
     
     // Create description from excerpt or content
     const description = post.excerpt || this.createExcerptFromContent(post.content);
