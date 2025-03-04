@@ -17,7 +17,7 @@ import { UserProfile } from '../../core/models/user-profile.model';
 import { ImageUploadComponent } from '../../shared/components/image-upload.component';
 
 @Component({
-  selector: 'app-user-profile',
+  selector: 'app-user-settings',
   standalone: true,
   imports: [
     CommonModule,
@@ -288,7 +288,7 @@ import { ImageUploadComponent } from '../../shared/components/image-upload.compo
     }
   `]
 })
-export class UserProfileComponent implements OnInit {
+export class UserSettingsComponent implements OnInit {
   private authService = inject(AuthService);
   private fb = inject(FormBuilder);
   private snackBar = inject(MatSnackBar);

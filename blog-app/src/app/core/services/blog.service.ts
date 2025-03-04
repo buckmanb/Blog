@@ -5,6 +5,7 @@ import {
   collection,
   addDoc,
   updateDoc,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -18,6 +19,7 @@ import {
   startAfter,
   getCountFromServer
 } from '@angular/fire/firestore';
+import { Storage, ref, uploadBytes, getDownloadURL, deleteObject } from '@angular/fire/storage';
 import { AuthService } from '../auth/auth.service';
 import { Observable, from, of, throwError } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
@@ -30,7 +32,7 @@ export interface BlogPost {
   authorId?: string;
   authorName?: string;
   authorPhotoURL?: string;
-  status: 'draft' | 'published';
+  status: 'draft' | 'published' | 'archived';
   featured?: boolean;
   tags: string[];
   imageUrl?: string;
@@ -53,6 +55,7 @@ export interface BlogPost {
 export class BlogService {
   private firestore = inject(Firestore);
   private authService = inject(AuthService);
+  private storage = inject(Storage);
 
 
   // Add this method to get total post count
@@ -497,31 +500,49 @@ export class BlogService {
    * Like a post
    */
   async likePost(postId: string): Promise<void> {
-    const user = this.authService.currentUser();
-
-    if (!user) {
-      throw new Error('You must be logged in to like a post');
-    }
-
     try {
-      // In a real implementation, you'd need to check if the user has already liked the post
-      // and maintain a collection of likes per post
-
-      const postRef = doc(this.firestore, 'posts', postId);
-      const postSnap = await getDoc(postRef);
-
-      if (!postSnap.exists()) {
+      const currentUser = this.authService.currentUser();
+      if (!currentUser) {
+        throw new Error('User must be logged in to like a post');
+      }
+      
+      const postDoc = doc(this.firestore, 'posts', postId);
+      const postSnapshot = await getDoc(postDoc);
+      
+      if (!postSnapshot.exists()) {
         throw new Error('Post not found');
       }
-
-      const post = postSnap.data() as BlogPost;
-      const currentLikes = post.likes || 0;
-
-      await updateDoc(postRef, {
-        likes: currentLikes + 1
-      });
+      
+      // Check if user has already liked the post
+      const likesRef = collection(this.firestore, 'posts', postId, 'likes');
+      const userLikeQuery = query(likesRef, where('userId', '==', currentUser.uid));
+      const userLikeSnapshot = await getDocs(userLikeQuery);
+      
+      if (userLikeSnapshot.empty) {
+        // User hasn't liked the post yet, add a like
+        await addDoc(likesRef, {
+          userId: currentUser.uid,
+          createdAt: serverTimestamp()
+        });
+        
+        // Increment the post's like count
+        const post = postSnapshot.data() as BlogPost;
+        await updateDoc(postDoc, {
+          likes: (post.likes || 0) + 1
+        });
+      } else {
+        // User already liked the post, remove the like
+        const likeDoc = userLikeSnapshot.docs[0];
+        await deleteDoc(doc(this.firestore, 'posts', postId, 'likes', likeDoc.id));
+        
+        // Decrement the post's like count
+        const post = postSnapshot.data() as BlogPost;
+        await updateDoc(postDoc, {
+          likes: Math.max(0, (post.likes || 0) - 1)
+        });
+      }
     } catch (error) {
-      console.error('Error liking post:', error);
+      console.error(`Error liking post ${postId}:`, error);
       throw error;
     }
   }
@@ -554,37 +575,97 @@ export class BlogService {
    * Delete a post
    */
   async deletePost(postId: string): Promise<void> {
-    const user = this.authService.currentUser();
-
-    if (!user) {
-      throw new Error('You must be logged in to delete a post');
-    }
-
     try {
-      const postRef = doc(this.firestore, 'posts', postId);
-      const postSnap = await getDoc(postRef);
-
-      if (!postSnap.exists()) {
+      const currentUser = this.authService.currentUser();
+      if (!currentUser) {
+        throw new Error('User must be logged in to delete a post');
+      }
+      
+      const postDoc = doc(this.firestore, 'posts', postId);
+      const postSnapshot = await getDoc(postDoc);
+      
+      if (!postSnapshot.exists()) {
         throw new Error('Post not found');
       }
-
-      const post = postSnap.data() as BlogPost;
-
-      // Check if user is author or admin
-      const profile = this.authService.profile();
-      if (post.authorId !== user.uid && profile?.role !== 'admin') {
+      
+      // Check if the user is the author or an admin
+      const existingPost = postSnapshot.data() as BlogPost;
+      const isAuthor = existingPost.authorId === currentUser.uid;
+      const isAdmin = this.authService.profile()?.role === 'admin';
+      
+      if (!isAuthor && !isAdmin) {
         throw new Error('You do not have permission to delete this post');
       }
-
-      // For now we'll just update the post to be flagged as deleted
-      // In a real implementation, you might want to move it to a deleted collection
-      await updateDoc(postRef, {
-        status: 'deleted',
-        updatedAt: serverTimestamp()
-      });
+      
+      // Delete the post's image if it has one
+      if (existingPost.image?.publicId) {
+        try {
+          const imageRef = ref(this.storage, `posts/${existingPost.image.publicId}`);
+          await deleteObject(imageRef);
+        } catch (imageError) {
+          console.error('Error deleting post image:', imageError);
+          // Continue with post deletion even if image deletion fails
+        }
+      }
+      
+      // Delete the post
+      await deleteDoc(postDoc);
     } catch (error) {
-      console.error('Error deleting post:', error);
+      console.error(`Error deleting post ${postId}:`, error);
+      throw error;
+    }
+
+  }
+  // Get posts by a specific author
+  async getPostsByAuthor(authorId: string, includeNonPublished: boolean = false): Promise<BlogPost[]> {
+    try {
+      const postsCollection = collection(this.firestore, 'posts');
+      
+      // Determine if we should include drafts and archived posts
+      // Only allow this for the author themselves or admins
+      const canSeeAllPosts = await this.canUserAccessAllPosts(authorId);
+      
+      let q;
+      if (includeNonPublished && canSeeAllPosts) {
+        // Get all posts by the author
+        q = query(
+          postsCollection,
+          where('authorId', '==', authorId),
+          orderBy('updatedAt', 'desc')
+        );
+      } else {
+        // Only get published posts
+        q = query(
+          postsCollection,
+          where('authorId', '==', authorId),
+          where('status', '==', 'published'),
+          orderBy('publishedAt', 'desc')
+        );
+      }
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as BlogPost));
+    } catch (error) {
+      console.error(`Error getting posts for author ${authorId}:`, error);
       throw error;
     }
   }
+
+   // Helper method to check if current user can access all posts of an author
+   private async canUserAccessAllPosts(authorId: string): Promise<boolean> {
+    const currentUser = this.authService.currentUser();
+    if (!currentUser) return false;
+    
+    // User can see their own posts
+    if (currentUser.uid === authorId) return true;
+    
+    // Admins can see all posts
+    const profile = this.authService.profile();
+    return profile?.role === 'admin';
+  }
+  
+
 }

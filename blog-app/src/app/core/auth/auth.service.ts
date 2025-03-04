@@ -144,6 +144,9 @@ export class AuthService {
       });
 
       await this.createUserProfile(credential.user);
+
+      // Update lastLogin field
+      await this.updateLastLogin(credential.user.uid);
       
       this.ngZone.run(() => {
         this.router.navigate(['/']);
@@ -166,6 +169,9 @@ export class AuthService {
         uid: result.user.uid,
         email: result.user.email
       });
+
+      // Update lastLogin field
+      await this.updateLastLogin(result.user.uid);
 
       this.ngZone.run(() => {
         this.router.navigate(['/']);
@@ -373,5 +379,19 @@ export class AuthService {
   async sendPasswordResetEmail(email: string): Promise<void> {
     const auth = getAuth();
     await sendPasswordResetEmail(auth, email);
+  }
+
+  private async updateLastLogin(uid: string): Promise<void> {
+    try {
+      const userRef = doc(this.firestore, `users/${uid}`);
+      await updateDoc(userRef, {
+        lastLogin: serverTimestamp()
+      });
+
+      console.log('🕒 Last Login Updated', { uid });
+    } catch (error) {
+      console.error('❌ Last Login Update Failed', { uid, error });
+      throw error;
+    }
   }
 }

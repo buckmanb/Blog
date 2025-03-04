@@ -14,6 +14,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { CommentFormComponent } from './comment-form.component';
 import { FlagCommentDialogComponent } from './flag-comment-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog.component';
+import { Router, RouterModule } from '@angular/router';
 
 @Component({
   selector: 'app-comment-item',
@@ -27,23 +28,31 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
     MatDividerModule,
     MatBadgeModule,
     MatProgressSpinnerModule,
-    CommentFormComponent
+    CommentFormComponent,
+    RouterModule
   ],
   template: `
     <div class="comment-container" [style.margin-left.px]="indentForDepth(comment.depth)">
       <mat-card class="comment-card" [class.deleted]="comment.status === 'deleted'">
         <div class="comment-header">
-          <div class="author-info">
-            <div class="author-avatar">
-              <img *ngIf="comment.authorPhotoURL" [src]="comment.authorPhotoURL" alt="Author" />
-              <mat-icon *ngIf="!comment.authorPhotoURL">account_circle</mat-icon>
+        <div class="author-info">
+            <div class="author-avatar clickable-avatar">
+              <img *ngIf="comment.authorPhotoURL" 
+                  [src]="comment.authorPhotoURL" 
+                  alt="Author" 
+                  [routerLink]="['/user/profile', comment.authorId]" 
+                  class="clickable-avatar"/>
+              <mat-icon *ngIf="!comment.authorPhotoURL"
+                        [routerLink]="['/user/profile', comment.authorId]"
+                        class="clickable-avatar">account_circle</mat-icon>
             </div>
             <div class="author-details">
-              <div class="author-name">{{ comment.authorName }}</div>
+              <div class="author-name clickable-name" [routerLink]="['/user/profile', comment.authorId]">
+                {{ comment.authorName }}
+              </div>
               <div class="comment-date">{{ formatDate(comment.createdAt) }}</div>
             </div>
           </div>
-          
           <!-- Status badge for admins -->
           <div *ngIf="isAdmin() && comment.status !== 'approved' && comment.status !== 'deleted'" class="status-badge">
             <span [class]="'badge badge-' + comment.status">{{ comment.status }}</span>
@@ -210,6 +219,8 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       gap: 8px;
       position: relative;
     }
+
+    
     
     .author-avatar {
       width: 32px;
@@ -251,6 +262,39 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
       color: var(--text-secondary);
     }
     
+    .author-avatar.clickable-avatar {
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+
+    .author-avatar.clickable-avatar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px transparent;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .author-avatar.clickable-avatar:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+
+    .author-avatar.clickable-avatar:hover::after {
+      box-shadow: 0 0 0 2px var(--primary-color);
+    }
+
+    .author-avatar.clickable-avatar img,
+    .author-avatar.clickable-avatar mat-icon {
+      cursor: pointer;
+    }
+
+
     .author-details {
       display: flex;
       flex-direction: column;
@@ -259,6 +303,35 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
     .author-name {
       font-weight: 500;
     }
+
+    .author-name.clickable-name {
+      color: var(--primary-color);
+      cursor: pointer;
+      position: relative;
+      display: inline-block;
+      transition: color 0.2s ease;
+    }
+
+    .author-name.clickable-name::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      bottom: -2px;
+      left: 0;
+      background-color: var(--primary-color);
+      transform: scaleX(0);
+      transform-origin: bottom left;
+      transition: transform 0.2s ease;
+    }
+
+    .author-name.clickable-name:hover {
+      color: var(--primary-darker);
+    }
+
+    .author-name.clickable-name:hover::after {
+      transform: scaleX(1);
+    }    
     
     .comment-date {
       font-size: 0.8rem;

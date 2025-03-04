@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { UserProfile } from '../../../core/models/user-profile.model';
 import { MatListModule } from '@angular/material/list';
 import { MatChipsModule } from '@angular/material/chips';
+import { UserService } from '../../../core/services/user.service'
 
 @Component({
   selector: 'app-user-detail-dialog',
@@ -54,7 +55,7 @@ import { MatChipsModule } from '@angular/material/chips';
             </mat-list-item>
             <mat-list-item *ngIf="user.lastLogin">
               <span matListItemTitle>Last Login</span>
-              <span matListItemLine>{{ user.lastLogin | date:'medium' }}</span>
+              <span matListItemLine>{{ formatDate(user.lastLogin) }}</span>
             </mat-list-item>
           </mat-list>
         </div>
@@ -167,10 +168,50 @@ import { MatChipsModule } from '@angular/material/chips';
 })
 export class UserDetailDialogComponent {
   user: UserProfile | null = null;
+  private userService = inject(UserService);
 
   constructor(
-    @Inject(MAT_DIALOG_DATA) public data: { user: UserProfile }
+    @Inject(MAT_DIALOG_DATA) public data: { userId: string }
   ) {
-    this.user = data.user;
+
+    this.userService.getUserById(data.userId).subscribe(data => {
+      this.user = data as UserProfile;
+    });    
   }
+
+  formatDate(timestamp: any): string {
+    if (!timestamp) return '';
+    
+    try {
+      // Firestore Timestamp with toDate method
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+      // Regular Date object
+      else if (timestamp instanceof Date) {
+        return timestamp.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+      // String or number timestamp
+      else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+        return new Date(timestamp).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+      return '';
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
+  }
+
 }

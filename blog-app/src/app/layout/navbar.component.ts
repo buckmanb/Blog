@@ -82,7 +82,7 @@ import { AuthService } from '../core/auth/auth.service';
             
             <mat-divider></mat-divider>
             
-            <a mat-menu-item routerLink="/user/profile">
+            <a mat-menu-item routerLink="/user/settings">
               <mat-icon>person</mat-icon>
               <span>Profile</span>
             </a>
@@ -126,7 +126,7 @@ import { AuthService } from '../core/auth/auth.service';
             Create Post
           </a>
           
-          <a routerLink="/user/profile" routerLinkActive="active" (click)="closeMobileMenu()">
+          <a routerLink="/user/settings" routerLinkActive="active" (click)="closeMobileMenu()">
             Profile
           </a>
           

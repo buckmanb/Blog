@@ -56,9 +56,9 @@ export class UserService {
   }
 
   getUserById(uid: string): Observable<UserProfile | null> {
-    const userDoc = doc(this.firestore, 'users', uid);
-    return from(getDoc(userDoc)).pipe(
-      map(doc => doc.exists() ? {
+    const userDoc = getDoc(doc(this.firestore, 'users', uid));
+    return from(userDoc).pipe(
+      map(doc => doc.exists() ? {        
         uid: doc.id,
         ...doc.data(),
         isActive: doc.data()['isActive'] ?? true, // Match the same default

@@ -4,7 +4,7 @@ import { LoginComponent } from './core/auth/login.component';
 import { SignupComponent } from './core/auth/signup.component';
 import { HomeComponent } from './features/home/home.component';
 import { BlogPostEditorComponent } from './features/blog/blog-post-editor.component';
-import { UserProfileComponent } from './features/user/profile.component';
+import { UserSettingsComponent } from './features/user/user-settings.component';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
 import { authorGuard } from './core/guards/author.guard';
@@ -53,15 +53,8 @@ export const routes: Routes = [
   {
     path: 'user',
     canActivate: [authGuard],
-    children: [
-      { path: 'profile', component: UserProfileComponent },
-      {
-        path: 'posts',
-        loadComponent: () => import('./features/user/user-posts.component')
-          .then(m => m.UserPostsComponent)
-      },
-      { path: '', redirectTo: 'profile', pathMatch: 'full' }
-    ]
+    loadChildren: () => import('./features/user/user.routes')
+      .then(m => m.USER_ROUTES)
   },
 
   // Admin routes

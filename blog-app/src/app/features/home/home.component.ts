@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { BlogService, BlogPost } from '../../core/services/blog.service';
+import { FeaturedPostsComponent  } from '../blog/featured-posts.component'; 
 
 @Component({
   selector: 'app-home',
@@ -19,7 +20,8 @@ import { BlogService, BlogPost } from '../../core/services/blog.service';
     RouterLink, 
     MatCardModule,
     MatChipsModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    FeaturedPostsComponent
   ],
   template: `
     <div class="home-container">
