@@ -3,10 +3,22 @@
 // Import theme styles
 @import './styles/theme.scss';
 
-html, body {
+// Background image applied to the body
+body {
   height: 100%;
   margin: 0;
   font-family: Roboto, "Helvetica Neue", sans-serif;
+  background-image: url('../public/BeausBlog.png');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
 }
 
 // Utility classes

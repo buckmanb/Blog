@@ -17,6 +17,8 @@
     --success-color: #4caf50;
     --warning-color: #ff9800;
     --info-color: #2196f3;
+
+    --background-img-color: rgba(255, 255, 255, .85);
     
     // Card and elevation colors
     --card-background: #ffffff;
@@ -49,6 +51,9 @@
     --success-color: #66bb6a;
     --warning-color: #ffa726;
     --info-color: #42a5f5;
+
+
+    --background-img-color: rgba(0, 0, 0, .85);
     
     // Card and elevation colors
     --card-background: #1e1e1e;
@@ -62,6 +67,7 @@
     --input-border: rgba(255, 255, 255, 0.23);
     --input-hover-border: rgba(255, 255, 255, 0.87);
     --input-focus-border: var(--primary-color);
+
   }
   
   // Common styles and transitions
@@ -69,8 +75,27 @@
     background-color: var(--background-color);
     color: var(--text-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
+    
+    background-image: url('../../public/BeausBlog.png');
+    background-size: cover;
+    background-attachment: fixed;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
   }
-  
+
+  // Add an overlay to make content more readable
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--background-img-color); /* semi-transparent white */
+    z-index: -1;    
+  }
+
   // Material overrides
   .mat-mdc-card {
     background-color: var(--card-background) !important;
