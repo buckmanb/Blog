@@ -633,7 +633,7 @@ export class PostDetailComponent implements OnInit {
       const shareData = this.shareService.getShareDataFromPost(currentPost);
       
       // Use the Web Share API if available
-      if (navigator.share) {
+      if (!navigator.share) {
         navigator.share({
           title: shareData.title,
           text: shareData.description,
