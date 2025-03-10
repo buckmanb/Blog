@@ -1,0 +1,23 @@
+{
+    "version": 3,
+    "builds": [
+      {
+        "src": "/api/auth/google.js",
+        "use": "@vercel/node"
+      },
+      {
+        "src": "/api/auth/callback.js",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+          "src": "/api/auth/google",
+          "dest": "/api/auth/google.js"
+      },
+      {
+          "src": "/api/auth/callback",
+          "dest": "/api/auth/callback.js"
+      }
+    ]
+  }
