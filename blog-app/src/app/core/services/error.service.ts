@@ -15,7 +15,10 @@ export class ErrorService {
       // Handle Firebase specific errors
       if (error.message.includes('auth/invalid-email')) {
         message = 'Invalid email address';
-      } else if (error.message.includes('auth/user-not-found')) {
+      } else if (error.message.includes('auth/invalid-credential')) {
+        message = 'Invalid username/password combination';
+      }
+      else if (error.message.includes('auth/user-not-found')) {
         message = 'User not found';
       } else if (error.message.includes('auth/wrong-password')) {
         message = 'Invalid password';
