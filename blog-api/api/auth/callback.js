@@ -1,7 +1,4 @@
 // api/auth/callback.js
-const app = require('/server');
-
-app.console.log("HELLO");
 const { OAuth2Client } = require('google-auth-library');
 
 const oAuth2Client = new OAuth2Client(

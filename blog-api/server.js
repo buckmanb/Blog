@@ -12,14 +12,14 @@ if (process.env.NODE_ENV === 'development') {
 
 const app = express();
 
-app.use(nocache());
+// app.use(nocache());
 //middleware
-// app.use(cors({
-//   origin: process.env.CLIENT_URL || 'http://localhost:4200',
-//   credentials: true
-// }));
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:4200',
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve static assets if in production
 if (process.env.NODE_ENV === 'production') {
