@@ -1,5 +1,4 @@
-// src/app/core/services/blog.service.ts
-import { Injectable, inject } from '@angular/core';
+import { inject, Injectable, NgZone } from '@angular/core';
 import {
   Firestore,
   collection,
@@ -21,8 +20,6 @@ import {
 } from '@angular/fire/firestore';
 import { Storage, ref, uploadBytes, getDownloadURL, deleteObject } from '@angular/fire/storage';
 import { AuthService } from '../auth/auth.service';
-import { Observable, from, of, throwError } from 'rxjs';
-import { map, catchError, switchMap } from 'rxjs/operators';
 
 export interface BlogPost {
   id?: string;
@@ -54,6 +51,7 @@ export interface BlogPost {
 })
 export class BlogService {
   private firestore = inject(Firestore);
+  private ngZone = inject(NgZone);
   private authService = inject(AuthService);
   private storage = inject(Storage);
 
@@ -160,20 +158,27 @@ export class BlogService {
         limitQuery(limitCount)
       );
 
-      const querySnapshot = await getDocs(q);
+      // Use NgZone to ensure we're in the Angular context
+      return this.ngZone.runOutsideAngular(async () => {
+        const querySnapshot = await getDocs(q);
 
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data() as DocumentData;
-        return {
-          id: doc.id,
-          ...data
-        } as BlogPost;
+        return this.ngZone.run(() => {
+          return querySnapshot.docs.map(doc => {
+            const data = doc.data() as DocumentData;
+            return {
+              id: doc.id,
+              ...data
+            } as BlogPost;
+          });
+        });
       });
-    } catch (error) {
+    } catch (error)
+     {
       console.error('Error fetching posts:', error);
       throw error;
     }
   }
+
 
   /**
    * Get posts for the current user

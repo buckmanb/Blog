@@ -12,6 +12,7 @@ export const environment = {
     },    
     google: {
         clientId: process.env['GOOGLE_CLIENT_ID'] || 'REPLACE_ME',
-    }
+    },
+    authServerUrl: 'http://localhost:3000'
 };
 

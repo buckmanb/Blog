@@ -13,7 +13,8 @@ import { getFunctions, provideFunctions } from '@angular/fire/functions';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideRouter(routes, withHashLocation() ),
+    // provideRouter(routes, withHashLocation() ),
+    provideRouter(routes),
     provideHttpClient(),
     provideAnimations(),
     provideFirebaseApp(() => initializeApp(environment.firebase)),

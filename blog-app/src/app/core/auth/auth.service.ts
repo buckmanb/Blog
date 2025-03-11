@@ -1,7 +1,7 @@
-import { Injectable, NgZone, inject, ApplicationRef } from '@angular/core';
-import { 
-  Auth, 
-  GoogleAuthProvider, 
+import { Injectable, OnInit, NgZone, inject, ApplicationRef } from '@angular/core';
+import {
+  Auth,
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -10,13 +10,14 @@ import {
   updateProfile,
   browserPopupRedirectResolver,
   sendSignInLinkToEmail,
+  signInWithCredential,
   sendPasswordResetEmail,
   getAuth
 } from '@angular/fire/auth';
-import { 
-  Firestore, 
-  doc, 
-  setDoc, 
+import {
+  Firestore,
+  doc,
+  setDoc,
   getDoc,
   docData,
   updateDoc,
@@ -30,29 +31,31 @@ import {
 } from '@angular/fire/firestore';
 import { Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { 
-  Observable, 
-  from, 
-  switchMap, 
-  of, 
-  tap, 
-  map, 
-  catchError 
+import {
+  Observable,
+  from,
+  switchMap,
+  of,
+  tap,
+  map,
+  catchError
 } from 'rxjs';
 import { ErrorService } from '../services/error.service';
 import { UserProfile } from '../models/user-profile.model';
+import { environment  } from '../../../environments/environment';
+
 
 @Injectable({
   providedIn: 'root',
 })
-export class AuthService {
+export class AuthService  {
   private auth = inject(Auth);
   private firestore = inject(Firestore);
   private router = inject(Router);
   private ngZone = inject(NgZone);
   private errorService = inject(ErrorService);
   private app = inject(ApplicationRef);
-  
+
   private readonly actionCodeSettings = {
     url: `${window.location.origin}/auth/complete-signup`,
     handleCodeInApp: true
@@ -164,7 +167,7 @@ export class AuthService {
   async emailSignIn(email: string, password: string) {
     try {
       const result = await signInWithEmailAndPassword(this.auth, email, password);
-      
+
       console.log('📧 Email Sign-In Successful', {
         uid: result.user.uid,
         email: result.user.email
@@ -189,7 +192,7 @@ export class AuthService {
   async emailSignUp(email: string, password: string, displayName: string) {
     try {
       const credential = await createUserWithEmailAndPassword(this.auth, email, password);
-      
+
       console.log('📝 Email Sign-Up Successful', {
         uid: credential.user.uid,
         email: credential.user.email,
@@ -225,7 +228,7 @@ export class AuthService {
       });
 
       await signOut(this.auth);
-      
+
       this.ngZone.run(() => {
         this.router.navigate(['/auth/login']);
         this.errorService.showSuccess('Successfully signed out!');
@@ -264,7 +267,7 @@ export class AuthService {
   async updateUserProfile(updates: Partial<UserProfile>): Promise<void> {
     const user = this.currentUser();
     if (!user) throw new Error('No authenticated user');
-  
+
     try {
       console.group('🔄 Updating User Profile');
       console.log('Current User:', user.uid);
@@ -275,19 +278,19 @@ export class AuthService {
           displayName: updates.displayName
         });
       }
-      
+
       if (updates.photoURL) {
         await updateProfile(user, {
           photoURL: updates.photoURL
         });
       }
-      
+
       const userRef = doc(this.firestore, `users/${user.uid}`);
       await updateDoc(userRef, {
         ...updates,
         updatedAt: serverTimestamp()
       });
-      
+
       console.log('✅ Profile Updated Successfully');
       console.groupEnd();
     } catch (error) {
@@ -336,9 +339,9 @@ export class AuthService {
       console.group('🔄 Updating User Role');
       const userRef = doc(this.firestore, `users/${uid}`);
       const auditRef = doc(collection(this.firestore, 'roleChangeAudit'));
-      
+
       await Promise.all([
-        updateDoc(userRef, { 
+        updateDoc(userRef, {
           role: newRole,
           updatedAt: serverTimestamp()
         }),
@@ -394,4 +397,52 @@ export class AuthService {
       throw error;
     }
   }
+
+  /**
+   * Process Google authentication token from server-side flow
+   */
+  async processGoogleToken(idToken: string, email: string, displayName: string, photoURL: string): Promise<void> {
+    try {
+      console.group('🔄 Processing Google Token');
+      console.log('Email:', email);
+      console.log('Display Name:', displayName);
+      
+      // Create a new credential with the Google ID token
+      const credential = await signInWithCredential(
+        this.auth,
+        GoogleAuthProvider.credential(idToken)
+      );
+
+      console.log('🌐 Google Auth Successful', {
+        uid: credential.user.uid,
+        email: credential.user.email
+      });
+
+      // Create user profile if it doesn't exist
+      await this.createUserProfile({
+        ...credential.user,
+        displayName: displayName || credential.user.displayName,
+        photoURL: photoURL || credential.user.photoURL
+      });
+
+      // Update lastLogin field
+      await this.updateLastLogin(credential.user.uid);
+      
+      console.log('✅ Profile Created/Updated Successfully');
+      console.groupEnd();
+
+      this.ngZone.run(() => {
+        this.router.navigate(['/']);
+        this.errorService.showSuccess('Successfully signed in with Google!');
+      });
+
+      this.app.tick();
+    } catch (error) {
+      console.error('❌ Google Auth Processing Failed', error);
+      console.groupEnd();
+      this.ngZone.run(() => this.errorService.showError(error));
+      throw error;
+    }
+  }
+
 }

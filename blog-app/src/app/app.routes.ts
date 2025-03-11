@@ -5,6 +5,7 @@ import { HomeComponent } from './features/home/home.component';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
 import { authorGuard } from './core/guards/author.guard';
+import { GoogleCallbackComponent } from './core/auth/google-callback.component';
 
 export const routes: Routes = [
   // Auth routes
@@ -13,6 +14,7 @@ export const routes: Routes = [
     children: [
       { path: 'login', component: LoginComponent },
       { path: 'signup', component: SignupComponent },
+      { path: 'google-callback', component: GoogleCallbackComponent }, // Add this line
       { path: '', redirectTo: 'login', pathMatch: 'full' }
     ]
   },
@@ -60,6 +62,28 @@ export const routes: Routes = [
     canActivate: [authGuard, adminGuard],
     loadChildren: () => import('./features/admin/admin.routes')
       .then(m => m.ADMIN_ROUTES)
+  },
+
+  // Legal routes
+  {
+    path: 'legal',
+    loadChildren: () => import('./features/legal/legal.routes')
+      .then(m => m.LEGAL_ROUTES)
+  },
+
+
+  // Sitemap routes
+  {
+    path: 'sitemap',
+    loadChildren: () => import('./features/sitemap/sitemap.routes')
+      .then(m => m.SITEMAP_ROUTES)
+  },
+  
+  // XML Sitemap direct route
+  {
+    path: 'sitemap.xml',
+    loadComponent: () => import('./features/sitemap/sitemap-xml.component')
+      .then(m => m.SitemapXmlComponent)
   },
 
   // Home route

@@ -1,7 +1,7 @@
 // src/app/app.component.ts
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { RouterOutlet, RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { ThemeToggleComponent } from './shared/components/theme-toggle.component';
@@ -14,10 +14,12 @@ import { NavbarComponent } from './layout/navbar.component';
   imports: [
     CommonModule,
     RouterOutlet,
+    RouterLink,
     MatToolbarModule,
     MatButtonModule,
     ThemeToggleComponent,
     NavbarComponent
+
   ],
   template: `
     <div class="app-container">
@@ -29,7 +31,13 @@ import { NavbarComponent } from './layout/navbar.component';
       
       <footer class="footer">
         <div class="container">
-          <p>&copy; {{ currentYear }} Beau's Blog. All rights reserved.</p>
+          <div class="footer-content">
+            <p>&copy; {{ currentYear }} Beau's Blog. All rights reserved.</p>
+            <div class="footer-links">
+              <a routerLink="/legal/privacy-policy">Privacy Policy</a>
+              <a routerLink="/sitemap">Sitemap</a>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
@@ -65,6 +73,37 @@ import { NavbarComponent } from './layout/navbar.component';
       max-width: 1200px;
       margin: 0 auto;
       padding: 0 1rem;
+    }
+    
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    
+    .footer-links {
+      display: flex;
+      gap: 1rem;
+    }
+    
+    .footer-links a {
+      color: var(--primary-color);
+      text-decoration: none;
+      transition: opacity 0.2s ease;
+    }
+    
+    .footer-links a:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 600px) {
+      .footer-content {
+        flex-direction: column;
+        text-align: center;
+      }
     }
   `]
 })

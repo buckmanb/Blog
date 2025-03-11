@@ -1,4 +1,3 @@
-// src/app/core/auth/login.component.ts
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -12,6 +11,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { AuthService } from './auth.service';
 import { ErrorService } from '../services/error.service';
+import { GoogleAuthService } from '../services/google-auth.service';
+import { trigger, state, style, transition, animate } from '@angular/animations';
+
+declare global {
+  const google: any;
+}
 
 @Component({
   selector: 'app-login',
@@ -28,16 +33,50 @@ import { ErrorService } from '../services/error.service';
     MatIconModule,
     RouterLink
   ],
+  animations: [
+    trigger('fadeSlideInOut', [
+      state('void', style({
+        opacity: 0,
+        transform: 'translateY(-10px)'
+      })),
+      transition('void <=> *', animate('300ms ease-in-out'))
+    ]),
+    trigger('loadingOverlay', [
+      state('void', style({
+        opacity: 0
+      })),
+      state('*', style({
+        opacity: 1
+      })),
+      transition('void <=> *', animate('200ms ease-in-out'))
+    ])
+  ],
   template: `
     <div class="flex justify-center items-center min-h-[80vh]">
-      <mat-card class="max-w-md w-full m-4">
+      <mat-card class="max-w-md w-full m-4 login-card">
+        <!-- Loading overlay animation -->
+        <div 
+          *ngIf="loading()" 
+          @loadingOverlay 
+          class="loading-overlay">
+          <div class="loading-content">
+            <mat-progress-spinner
+              [diameter]="50"
+              [strokeWidth]="4"
+              mode="indeterminate"
+              color="primary">
+            </mat-progress-spinner>
+            <p class="loading-text">Processing...</p>
+          </div>
+        </div>
+        
         <mat-card-header>
           <mat-card-title>Login</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-4 mt-4">
             <!-- Display form-level errors -->
-            <div *ngIf="loginForm.errors?.['customError']" class="error-alert">
+            <div *ngIf="loginForm.errors?.['customError']" @fadeSlideInOut class="error-alert">
               <div>
                 <mat-icon class="error-icon">error</mat-icon> 
                 {{loginForm.errors?.['customError']}}
@@ -68,41 +107,27 @@ import { ErrorService } from '../services/error.service';
 
             <button mat-raised-button color="primary" type="submit" 
                     [disabled]="!loginForm.valid || loading()"
-                    class="w-full relative h-[36px]">
-              <span [class.opacity-0]="emailLoginLoading()">Login</span>
-              <mat-progress-spinner
-                *ngIf="emailLoginLoading()"
-                class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-                [diameter]="24"
-                [strokeWidth]="2"
-                mode="indeterminate">
-              </mat-progress-spinner>
+                    class="w-full login-button">
+              <span>Login</span>
             </button>
           </form>
 
           <mat-divider class="my-4"></mat-divider>
 
           <button mat-stroked-button 
-                  (click)="onGoogleLogin()"
+                  (click)="onServerGoogleLogin()"
                   [disabled]="loading()"
-                  class="w-full google-btn relative h-[40px]">
-            <div class="flex items-center justify-center gap-2" [class.opacity-0]="googleLoginLoading()">
+                  class="w-full google-btn">
+            <div class="flex items-center justify-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48" class="google-icon">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
                 <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
               </svg>
-              Login with Google
+              <span>Login with Google</span>
             </div>
-            <mat-progress-spinner
-              *ngIf="googleLoginLoading()"
-              class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-              [diameter]="24"
-              [strokeWidth]="2"
-              mode="indeterminate">
-            </mat-progress-spinner>
-          </button>
+          </button>         
 
           <div class="mt-4 text-center">
             <a mat-button routerLink="/auth/signup" [disabled]="loading()">
@@ -114,6 +139,60 @@ import { ErrorService } from '../services/error.service';
     </div>
   `,
   styles: [`
+    .login-card {
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      backdrop-filter: blur(2px);
+    }
+    
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .loading-text {
+      color: var(--primary-color);
+      font-weight: 500;
+      font-size: 1rem;
+      letter-spacing: 0.5px;
+      animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+      0% {
+        opacity: 0.6;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0.6;
+      }
+    }
+    
+    .login-button {
+      height: 36px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
     .google-btn {
       height: 40px !important;
       font-weight: 500 !important;
@@ -149,6 +228,7 @@ import { ErrorService } from '../services/error.service';
       display: flex;
       flex-direction: column;
       gap: 8px;
+      border-left: 3px solid #f44336;
     }
 
     .error-alert div {
@@ -184,127 +264,113 @@ import { ErrorService } from '../services/error.service';
 export class LoginComponent {
   private authService = inject(AuthService);
   private errorService = inject(ErrorService);
-
+  private googleAuthService = inject(GoogleAuthService);
+  
   loginForm = inject(FormBuilder).nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(6)]]
   });
 
-  // Two separate loading states for different login methods
+  // Single loading state for the entire form
   loading = signal<boolean>(false);
-  emailLoginLoading = signal<boolean>(false);
-  googleLoginLoading = signal<boolean>(false);
+
+  onServerGoogleLogin() {
+    if (this.loading()) return;
+    
+    this.loading.set(true);
+    this.googleAuthService.redirectToGoogleLogin();
+      // .catch((error: any) => {
+      //   this.handleLoginError(error);
+      //   this.loading.set(false);
+      // });
+  }
 
   async onSubmit() {
-    if (this.loginForm.valid) {
+    if (this.loginForm.valid && !this.loading()) {
       try {
         this.loading.set(true);
-        this.emailLoginLoading.set(true);
         const { email, password } = this.loginForm.getRawValue();
         
-        // We'll catch the error here and not let it propagate to the error service
-        // This is done by creating a custom try/catch wrapper around the auth service call
         try {
           await this.authService.emailSignIn(email, password);
         } catch (error: any) {
-          // Get error code from error message or error object
-          const errorCode = error.code || 
-                          (error.message && error.message.includes('auth/') ? 
-                          error.message.split('auth/')[1].split(')')[0] : 
-                          'unknown-error');
-          
-          // Determine the appropriate error message
-          let errorMessage: string;
-          switch (errorCode) {
-            case 'invalid-credential':
-            case 'invalid-email':
-            case 'user-not-found':
-            case 'wrong-password':
-              // For security, use a generic message for credential errors
-              errorMessage = 'Invalid email or password';
-              break;
-            case 'user-disabled':
-              errorMessage = 'This account has been disabled';
-              break;
-            case 'too-many-requests':
-              errorMessage = 'Too many failed login attempts. Please try again later or reset your password';
-              break;
-            case 'network-request-failed':
-              errorMessage = 'Network error. Please check your internet connection';
-              break;
-            default:
-              errorMessage = 'Login failed. Please try again';
-              break;
-          }
-          
-          // Set the form error
-          this.loginForm.setErrors({ customError: errorMessage });
-          
-          // Ensure we don't propagate the error further
-          throw new Error(errorMessage);
+          this.handleLoginError(error);
+          throw error; // Re-throw to ensure we skip to finally block
         }
       } catch (error: any) {
         console.error('Login error:', error.message || error);
-        // Don't call this.errorService.showError() to avoid showing the Firebase error
       } finally {
         this.loading.set(false);
-        this.emailLoginLoading.set(false);
       }
     }
   }
-
+  
   /**
    * Google login with optimized cancellation handling
    */
   async onGoogleLogin() {
-    if (this.loading()) return; // Prevent multiple simultaneous attempts
+    if (this.loading()) return;
     
-    // Set loading state immediately for UI feedback
     this.loading.set(true);
-    this.googleLoginLoading.set(true);
     
     try {
-      // Use a timeout promise to detect potential hanging popups
-      const authPromise = this.authService.googleSignIn();
-      
-      await authPromise;
-      // Success - no additional handling needed
-      
+      await this.authService.googleSignIn();
     } catch (error: any) {
-      // Get the error details
-      const errorCode = error.code || '';
-      const errorMessage = error.message || '';
-      
-      // Check for user cancellation with minimal processing
-      if (
-        errorCode === 'auth/popup-closed-by-user' || 
-        errorMessage.includes('popup closed') ||
-        errorMessage.includes('cancel')
-      ) {
-        // Just log and return immediately for faster response
-        console.log('User cancelled Google login');
-        return;
-      }
-      
-      // Handle other errors
-      let userErrorMessage: string;
-      
-      if (errorCode === 'auth/popup-blocked' || errorMessage.includes('popup blocked')) {
-        userErrorMessage = 'Sign-in popup was blocked by your browser. Please allow popups for this site.';
-      } else if (errorMessage.includes('network')) {
-        userErrorMessage = 'Network error. Please check your internet connection.';
-      } else {
-        userErrorMessage = 'Google sign-in failed. Please try again or use email sign-in.';
-      }
-      
-      // Set form error with minimal processing
-      this.loginForm.setErrors({ customError: userErrorMessage });
-      
+      this.handleLoginError(error);
     } finally {
-      // Always reset loading states
       this.loading.set(false);
-      this.googleLoginLoading.set(false);
     }
   }
-
+  
+  /**
+   * Centralized error handling for both login methods
+   */
+  private handleLoginError(error: any): void {
+    // Get error code from error message or error object
+    const errorCode = error.code || 
+                    (error.message && error.message.includes('auth/') ? 
+                    error.message.split('auth/')[1].split(')')[0] : 
+                    'unknown-error');
+    
+    // If user cancelled Google login, just return without error message
+    if (
+      errorCode === 'auth/popup-closed-by-user' || 
+      (error.message && (
+        error.message.includes('popup closed') ||
+        error.message.includes('cancel')
+      ))
+    ) {
+      console.log('User cancelled login');
+      return;
+    }
+    
+    // Determine the appropriate error message
+    let errorMessage: string;
+    switch (errorCode) {
+      case 'invalid-credential':
+      case 'invalid-email':
+      case 'user-not-found':
+      case 'wrong-password':
+        errorMessage = 'Invalid email or password';
+        break;
+      case 'user-disabled':
+        errorMessage = 'This account has been disabled';
+        break;
+      case 'too-many-requests':
+        errorMessage = 'Too many failed login attempts. Please try again later';
+        break;
+      case 'network-request-failed':
+        errorMessage = 'Network error. Please check your internet connection';
+        break;
+      case 'auth/popup-blocked':
+        errorMessage = 'Sign-in popup was blocked. Please allow popups for this site';
+        break;
+      default:
+        errorMessage = 'Login failed. Please try again';
+        break;
+    }
+    
+    // Set the form error
+    this.loginForm.setErrors({ customError: errorMessage });
+  }
 }
